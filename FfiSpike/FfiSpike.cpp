@@ -5,6 +5,11 @@
 #include <thread>
 #include "json.hpp"
 
+#include "PlistCpp\Plist.hpp"
+#include "PlistCpp\PlistDate.hpp"
+//#include "PlistCpp\include\boost\"
+#include "PlistCpp\include\boost\any.hpp"
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -58,7 +63,6 @@ const std::string file_prefix("file:///");
 #define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
 #define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, value) ; if((__result = (expr))) { print_error(error_msg, __result); return value; }
 #define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg) PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg)
-////#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg) ; if((__result = (expr))) { print_error(error_msg, __result); return; }
 #define GET_IF_EXISTS(variable, type, dll, method_name) (variable ? variable : variable = (type)GetProcAddress(dll, method_name))
 
 using json = nlohmann::json;
@@ -79,6 +83,12 @@ struct DeviceInfo {
 struct DevicePointer {
 	DeviceInfo* device_info;
 	unsigned msg;
+};
+
+struct LiveSyncApplicationInfo {
+	bool is_livesync_supported;
+	std::string application_identifier;
+	std::string configuration;
 };
 
 struct afc_connection {
@@ -107,6 +117,7 @@ struct afc_directory {
 struct DeviceData {
 	DeviceInfo* device_info;
 	std::map<const char*, HANDLE> services;
+	std::vector<LiveSyncApplicationInfo> livesync_app_infos;
 };
 
 #pragma endregion Data_Structures_Definition
@@ -479,6 +490,11 @@ HANDLE start_service(const char* device_identifier, const char* service_name)
 		return NULL;
 	}
 
+	if (devices[device_identifier].services.count(service_name))
+	{
+		return devices[device_identifier].services[service_name];
+	}
+
 	HANDLE socket = NULL;
 	start_session(devices[device_identifier].device_info);
 	CFStringRef cf_service_name = create_CFString(service_name);
@@ -492,6 +508,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name)
 		return NULL;
 	}
 
+	devices[device_identifier].services[service_name] = socket;
 	return socket;
 }
 
@@ -630,6 +647,11 @@ void install_application(std::string install_path, const char* device_identifier
 	fflush(stdout);
 }
 
+void perform_detached_operation(void(*operation)(const char*), std::string arg)
+{
+	std::thread([operation, arg]() { operation(arg.c_str());  }).detach();
+}
+
 void perform_detached_operation(void(*operation)(std::string, const char*), json method_args)
 {
 	std::string first_arg = method_args[0].get<std::string>();
@@ -651,6 +673,7 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 		std::string message("Could not open file info for file: ");
 		message += dir;
 		print_error(message.c_str(), afc_file_info_open_result);
+		return;
 	}
 
 	afc_directory afc_dir;
@@ -709,7 +732,6 @@ void list_files(const char *device_identifier, const char *application_identifie
 	std::string device_path_str = windows_path_to_unix(device_path);
 	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files);
 	printf("%s", json({ { "response", files } }).dump().c_str());
-	printf("%d", devices[device_identifier].services[HOUSE_ARREST]);
 	fflush(stdout);
 }
 
@@ -847,15 +869,36 @@ void read_file(const char *device_identifier, const char *application_identifier
 	fflush(stdout);
 }
 
-void start_application(const char *device_identifier, const char *application_identifier, const char *ddi)
+LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string application_identifier, const char *device_identifier)
 {
-	HANDLE image_mounter_service = start_service(device_identifier, MOBILE_IMAGE_MOUNTER);
-	if (!image_mounter_service)
+	HANDLE socket = start_service(device_identifier, INSTALLATION_PROXY);
+	if (!socket)
 	{
-		return;
+		return NULL;
 	}
 
-	char *xml_command = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>Command</key>\n\t<string>ReceiveBytes</string>\n\t<key>ImageSize</key>\n\t<integer>12067089</integer>\n\t<key>ImageType</key>\n\t<string>Developer</string>\n\t<key>ImageSignature</key>\n\t<data>\n\tMYVwyjadUrWL6nnntpSuQQ52URR6lQX1ytYja5jdL5L6sKpASOj27LzCkCT0\n\tcCdPogjLMj/eNp300//m5WtvZqT9KQFV1OfYH9XxVA8lrvVzNCsxzws2bRaG\n\tfpynlICGwW7ts9ktBwP8/ZG0vM7QubGb5vNTVgkLmTMm6ohhpKk=\n\t</data>\n</dict>\n</plist>\n";
+	int result_index = -1;
+	int current_index = -1;
+	devices[device_identifier].livesync_app_infos.clear();
+	char *xml_command = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+						"<plist version=\"1.0\">"
+						"<dict>"
+							"<key>Command</key>"
+							"<string>Browse</string>"
+							"<key>ClientOptions</key>"
+							"<dict>"
+								"<key>ApplicationType</key>"
+								"<string>User</string>"
+								"<key>ReturnAttributes</key>"
+								"<array>"
+									"<string>CFBundleIdentifier</string>"
+									"<string>IceniumLiveSyncEnabled</string>"
+									"<string>configuration</string>"
+								"</array>"
+							"</dict>"
+						"</dict>"
+						"</plist>";
 	size_t xml_command_len = strlen(xml_command);
 	unsigned long message_len = xml_command_len + 4;
 	char *message = new char[message_len];
@@ -863,16 +906,117 @@ void start_application(const char *device_identifier, const char *application_id
 	size_t packed_length_size = sizeof(packed_length);
 	memcpy(message, &packed_length, packed_length_size);
 	memcpy(message + packed_length_size, xml_command, xml_command_len);
-	int bytes_sent = send((SOCKET)image_mounter_service, message, message_len, 0);
+	int bytes_sent = send((SOCKET)socket, message, message_len, 0);
 	free(message);
-	char *buffer = new char[4];
-	auto b = recv((SOCKET)image_mounter_service, buffer, 4, 0);
-	//const char *response = (buffer + sizeof(prepend));
-	unsigned long res = ntohl(*((unsigned long*)buffer));
+	while (true)
+	{
+		std::map<std::string, boost::any> dict;
+		char *buffer = new char[4];
+		int bytes_read = recv((SOCKET)socket, buffer, 4, 0);
+		unsigned long res = ntohl(*((unsigned long*)buffer));
+		free(buffer);
+		buffer = new char[res];
+		bytes_read = recv((SOCKET)socket, buffer, res, 0);
+		Plist::readPlist(buffer, res, dict);
+		free(buffer);
+		PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count("Error"), boost::any_cast<std::string>(dict["Error"]).c_str(), NULL);
+		if (dict.count("Status") && boost::any_cast<std::string>(dict["Status"]) == "Complete")
+		{
+			break;
+		}
+		std::vector<boost::any> current_list = boost::any_cast<std::vector<boost::any>>(dict["CurrentList"]);
+		for (boost::any list : current_list)
+		{
+			std::map<std::string, boost::any> app_info = boost::any_cast<std::map<std::string, boost::any>>(list);
+			LiveSyncApplicationInfo current_info = {
+				app_info.count("IceniumLiveSyncEnabled") && boost::any_cast<bool>(app_info["IceniumLiveSyncEnabled"]),
+				app_info.count("CFBundleIdentifier") ? boost::any_cast<std::string>(app_info["CFBundleIdentifier"]) : "",
+				app_info.count("configuration") ? boost::any_cast<std::string>(app_info["configuration"]) : "",
+			};
+			devices[device_identifier].livesync_app_infos.push_back(current_info);
+			++current_index;
+			if (current_info.application_identifier == application_identifier)
+			{
+				result_index = current_index;
+			}
+		}
+	}
+
+	return result_index == -1 ? NULL : &devices[device_identifier].livesync_app_infos[result_index];
+}
+
+json to_json(LiveSyncApplicationInfo* info, const char* device_identifier)
+{
+	json result;
+	result["device_identifier"] = device_identifier;
+	result["configuration"] = info->configuration;
+	result["is_livesync_supported"] = info->is_livesync_supported;
+	return result;
+}
+
+void is_app_installed(std::string application_identifier, const char* device_identifier)
+{
+	if (!devices.count(device_identifier))
+	{
+		print_error("Device not found", kAMDNotFoundError);
+		return;
+	}
+
+	for (LiveSyncApplicationInfo livesync_app_info : devices[device_identifier].livesync_app_infos)
+	{
+		if (livesync_app_info.application_identifier == application_identifier)
+		{
+			json r = to_json(&livesync_app_info, device_identifier);
+			printf(r.dump().c_str());
+			fflush(stdout);
+			return;
+		}
+	}
+
+	/*get_applications_livesync_supported_status(application_identifier, device_identifier);
+	for (LiveSyncApplicationInfo livesync_app_info : devices[device_identifier].livesync_app_infos)
+	{
+		if (livesync_app_info.application_identifier == application_identifier)
+		{
+			printf("FOUND AFTER ALL!");
+			fflush(stdout);
+			return;
+		}
+	}
+
+	print_error("App not installed", kAMDNotFoundError);*/
+	LiveSyncApplicationInfo *livesync_app_info = get_applications_livesync_supported_status(application_identifier, device_identifier);
+	if (livesync_app_info)
+	{
+		json r = to_json(livesync_app_info, device_identifier);
+		printf(r.dump().c_str());
+		fflush(stdout);
+	}
+	else
+	{
+		print_error("App not installed", kAMDNotFoundError);
+	}
+}
+
+void device_log(const char* device_identifier)
+{
+	HANDLE socket = start_service(device_identifier, SYSLOG);
+	if (!socket)
+	{
+		return;
+	}
+
+	char *buffer = new char[1024];
+	int bytes_read; 
+	while (bytes_read = recv((SOCKET)socket, buffer, 1024, 0))
+	{
+		json message;
+		message["deviceId"] = device_identifier;
+		message["message"] = buffer;
+		printf(message.dump().c_str());
+		fflush(stdout);
+	}
 	free(buffer);
-	buffer = new char[res];
-	b = recv((SOCKET)image_mounter_service, buffer, res, 0);
-	int cdafa = 0;
 }
 
 int main()
@@ -949,15 +1093,16 @@ int main()
 			//		read_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str());
 			//	}
 			//}*/
-			if (method_name == "start")
+			if (method_name == "isInstalled")
 			{
-				for (json arg : method_args)
-				{
-					std::string application_identifier = arg.value("appId", "");
-					std::string device_identifier = arg.value("deviceId", "");
-					std::string ddi = arg.value("ddi", "");
-					start_application(device_identifier.c_str(), application_identifier.c_str(), ddi.c_str());
-				}
+				perform_detached_operation(is_app_installed, method_args);
+			}
+			if (method_name == "log")
+			{
+				std::string device_identifier = method_args[0].get<std::string>();
+				perform_detached_operation(device_log, device_identifier);
+				//std::thread([device_identifier]() { device_log(device_identifier.c_str());  }).detach();
+				//device_log(device_identifier.c_str());
 			}
 			if (method_name == "exit")
 			{
