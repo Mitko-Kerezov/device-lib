@@ -1024,12 +1024,9 @@ int main()
 	RETURN_IF_FAILED_RESULT(load_dlls());
 
 	char *input = new char[200];
-	bool run_loop_started = false;
 
-	// Delete later on
-	run_loop_started = true;
 	std::thread([]() { start_run_loop(); }).detach();
-	// ~Delete later on
+	
 	for (std::string line; std::getline(std::cin, line);)
 	{
 		json message = json::parse(line.c_str());
@@ -1037,11 +1034,6 @@ int main()
 		{
 			std::string method_name = method.value("name", "");
 			std::vector<json> method_args = method.value("args", json::array()).get<std::vector<json>>();
-			if (method_name == "run_loop" && !run_loop_started)
-			{
-				run_loop_started = true;
-				std::thread([]() { start_run_loop(); }).detach();
-			}
 			if (method_name == "uninstall")
 			{
 				perform_detached_operation(uninstall_application, method_args);
