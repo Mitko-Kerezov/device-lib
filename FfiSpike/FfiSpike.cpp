@@ -73,6 +73,11 @@ using json = nlohmann::json;
 
 #pragma region Data_Structures_Definition
 
+struct LengthEncodedMessage {
+	char *message;
+	size_t length;
+};
+
 struct DeviceInfo {
 	unsigned char unknown0[16]; /* 0 - zero */
 	unsigned int device_id;     /* 16 */
@@ -501,7 +506,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 	}
 
 	HANDLE socket = NULL;
-	start_session(devices[device_identifier].device_info);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(devices[device_identifier].device_info), "Could start device session", method_id, NULL);
 	CFStringRef cf_service_name = create_CFString(service_name);
 	unsigned result = AMDeviceStartService(devices[device_identifier].device_info, cf_service_name, &socket, NULL);
 	CFRelease(cf_service_name);
@@ -862,6 +867,19 @@ void read_file(const char *device_identifier, const char *application_identifier
 	fflush(stdout);
 }
 
+
+LengthEncodedMessage get_message_with_encoded_length(const char* message)
+{
+	size_t original_message_len = strlen(message);
+	unsigned long message_len = original_message_len + 4;
+	char *length_encoded_message = new char[message_len];
+	unsigned long packed_length = htonl(original_message_len);
+	size_t packed_length_size = sizeof(packed_length);
+	memcpy(length_encoded_message, &packed_length, packed_length_size);
+	memcpy(length_encoded_message + packed_length_size, message, original_message_len);
+	return { length_encoded_message, message_len };
+}
+
 LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string application_identifier, const char *device_identifier, std::string method_id)
 {
 	HANDLE socket = start_service(device_identifier, INSTALLATION_PROXY, method_id);
@@ -873,7 +891,7 @@ LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string 
 	int result_index = -1;
 	int current_index = -1;
 	devices[device_identifier].livesync_app_infos.clear();
-	char *xml_command = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+	const char *xml_command = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
 						"<plist version=\"1.0\">"
 						"<dict>"
@@ -892,15 +910,10 @@ LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string 
 							"</dict>"
 						"</dict>"
 						"</plist>";
-	size_t xml_command_len = strlen(xml_command);
-	unsigned long message_len = xml_command_len + 4;
-	char *message = new char[message_len];
-	unsigned long packed_length = htonl(xml_command_len);
-	size_t packed_length_size = sizeof(packed_length);
-	memcpy(message, &packed_length, packed_length_size);
-	memcpy(message + packed_length_size, xml_command, xml_command_len);
-	int bytes_sent = send((SOCKET)socket, message, message_len, 0);
-	free(message);
+	
+	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command);
+	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
+	free(length_encoded_message.message);
 	while (true)
 	{
 		std::map<std::string, boost::any> dict;
@@ -972,7 +985,9 @@ void is_app_installed(std::string application_identifier, const char* device_ide
 	{
 		json livesync_app_info_json = to_json(livesync_app_info, device_identifier);
 		livesync_app_info_json[kId] = method_id;
-		printf(livesync_app_info_json.dump().c_str());
+		auto asd = get_message_with_encoded_length(livesync_app_info_json.dump().c_str());
+		//printf("%.*s", asd.length, asd.message);
+		fwrite(asd.message, asd.length, 1, stdout);
 		fflush(stdout);
 	}
 	else
@@ -997,7 +1012,14 @@ void device_log(const char* device_identifier, std::string method_id)
 		message["deviceId"] = device_identifier;
 		message[kMessage] = buffer;
 		message[kId] = method_id;
-		printf(message.dump().c_str());
+		//printf(message.dump().c_str());
+		auto asd = get_message_with_encoded_length(message.dump().c_str());
+		if (asd.length == 269 + 4)
+		{
+			int a = 5;
+		}
+		fwrite(asd.message, asd.length, 1, stdout);
+		free(asd.message);
 		fflush(stdout);
 	}
 	free(buffer);
