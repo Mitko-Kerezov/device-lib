@@ -3,15 +3,15 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
-#include "json.hpp"
-
-#include "PlistCpp\Plist.hpp"
-#include "PlistCpp\PlistDate.hpp"
-//#include "PlistCpp\include\boost\"
-#include "PlistCpp\include\boost\any.hpp"
-
+#include <io.h>
+#include <fcntl.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+#include "json.hpp"
+#include "PlistCpp\Plist.hpp"
+#include "PlistCpp\PlistDate.hpp"
+#include "PlistCpp\include\boost\any.hpp"
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -43,20 +43,14 @@
 #define DEVICE_UNKNOWN "deviceUnknown"
 
 const char *kId = "id";
+const char *kNullMessageId = "null";
 const char *kError = "error";
 const char *kMessage = "message";
 const char *kCode = "code";
 const int kAFCFileModeRead = 2;
 const int kAFCFileModeWrite = 3;
 const char *kPathSeparators = "/\\";
-const char kWindowsPathSeparator = '\\';
 const char kUnixPathSeparator = '/';
-const char kPathSeparator =
-#ifdef _WIN32
-kWindowsPathSeparator;
-#else
-kUnixPathSeparator;
-#endif
 
 const std::string file_prefix("file:///");
 
@@ -256,6 +250,32 @@ struct cmp_str
 int __result;
 std::map<const char*, DeviceData, cmp_str> devices;
 
+LengthEncodedMessage get_message_with_encoded_length(const char* message)
+{
+	size_t original_message_len = strlen(message);
+	unsigned long message_len = original_message_len + 4;
+	char *length_encoded_message = new char[message_len];
+	unsigned long packed_length = htonl(original_message_len);
+	size_t packed_length_size = sizeof(packed_length);
+	memcpy(length_encoded_message, &packed_length, packed_length_size);
+	memcpy(length_encoded_message + packed_length_size, message, original_message_len);
+	return{ length_encoded_message, message_len };
+}
+
+void print(const char* str)
+{
+	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(str);
+	fwrite(length_encoded_message.message, length_encoded_message.length, 1, stdout);
+	fflush(stdout);
+	free(length_encoded_message.message);
+}
+
+void print(json message)
+{
+	std::string str = message.dump();
+	print(str.c_str());
+}
+
 std::string get_dirname(const char *path)
 {
 	size_t found;
@@ -418,8 +438,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 		}
 	}
 
-	printf("%s", result.dump().c_str());
-	fflush(stdout);
+	print(result);
 }
 
 void add_dll_paths_to_environment()
@@ -437,29 +456,30 @@ void print_error(const char *message, std::string method_id, int code = GetLastE
 	exception[kError][kMessage] = message;
 	exception[kError][kCode] = code;
 	exception[kId] = method_id;
-	fprintf(stderr, "%s", exception.dump().c_str());
+	//Decided it's a better idea to print everything to stdout
+	//Not a good practice, but the client process wouldn't have to monitor both streams
+	//fprintf(stderr, "%s", exception.dump().c_str());
+	print(exception);
 }
 
 int load_dlls()
 {
-	int result = 0;
 	add_dll_paths_to_environment();
-
 	mobile_device_dll = LoadLibrary("MobileDevice.dll");
 	if (!mobile_device_dll)
 	{
-		result = GetLastError();
-		print_error("Could not load MobileDevice.dll", "null", result);
+		print_error("Could not load MobileDevice.dll", kNullMessageId);
+		return 1;
 	}
 
 	core_foundation_dll = LoadLibrary("CoreFoundation.dll");
 	if (!core_foundation_dll)
 	{
-		result = GetLastError();
-		print_error("Could not load CoreFoundation.dll", "null", result);
+		print_error("Could not load CoreFoundation.dll", kNullMessageId);
+		return 1;
 	}
 
-	return result;
+	return 0;
 }
 
 int subscribe_for_notifications()
@@ -469,11 +489,7 @@ int subscribe_for_notifications()
 	int result = AMDeviceNotificationSubscribe(device_notification_callback, 0, 0, 0, &notify_function);
 	if (result)
 	{
-		json exception;
-		int last_error = GetLastError();
-		exception[kError][kMessage] = "Could not attach notification callback";
-		exception[kError][kCode] = last_error;
-		fprintf(stderr, "%s", exception.dump().c_str());
+		print_error("Could not attach notification callback", kNullMessageId);
 	}
 
 	return result;
@@ -599,8 +615,7 @@ void uninstall_application(std::string application_identifier, const char* devic
 	}
 	else
 	{
-		printf("%s", json({ { "response", "Successfully uninstalled application" }, { kId, method_id } }).dump().c_str());
-		fflush(stdout);
+		print(json({{ "response", "Successfully uninstalled application" }, { kId, method_id }}));
 	}
 }
 
@@ -653,8 +668,7 @@ void install_application(std::string install_path, const char* device_identifier
 		return;
 	}
 
-	printf("%s", json({ { "response", "Successfully installed application" }, { kId, method_id } }).dump().c_str());
-	fflush(stdout);
+	print(json({{ "response", "Successfully installed application" }, { kId, method_id }}));
 }
 
 void perform_detached_operation(void(*operation)(const char*, std::string), std::string arg, std::string method_id)
@@ -741,8 +755,7 @@ void list_files(const char *device_identifier, const char *application_identifie
 	
 	std::string device_path_str = windows_path_to_unix(device_path);
 	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, method_id);
-	printf("%s", json({ { "response", files }, { kId, method_id } }).dump().c_str());
-	fflush(stdout);
+	print(json({{ "response", files }, { kId, method_id }}));
 }
 
 void* read_file_to_memory(char * path, size_t* file_size)
@@ -814,8 +827,7 @@ void upload_file(const char *device_identifier, const char *application_identifi
 			error_message << "Could not close file reference: " << destination;
 			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(afc_conn_p, file_ref), error_message.str().c_str(), method_id);
 			error_message.str(std::string());
-			printf("%s", json({ { "response", "Successfully uploaded file" }, { kId, method_id } }).dump().c_str());
-			fflush(stdout);
+			print(json({{ "response", "Successfully uploaded file" },{ kId, method_id }}));
 		}
 	}
 	else 
@@ -840,8 +852,7 @@ void delete_file(const char *device_identifier, const char *application_identifi
 	std::stringstream error_message;
 	error_message << "Could not remove file " << destination;
 	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCRemovePath(afc_conn_p, destination), error_message.str().c_str(), method_id);
-	printf("%s", json({ { "response", "Successfully removed file" }, { kId, method_id } }).dump().c_str());
-	fflush(stdout);
+	print(json({{ "response", "Successfully removed file" },{ kId, method_id }}));
 }
 
 void read_file(const char *device_identifier, const char *application_identifier, const char *destination, std::string method_id) {
@@ -863,21 +874,7 @@ void read_file(const char *device_identifier, const char *application_identifier
 	void *buf = malloc(sizeof(size_t) * size_to_read);
 	AFCFileRefRead(afc_conn_p, &file_ref, buf, size_to_read);
 
-	printf("%s", json({ { "response", "Successfully uploaded file" }, { kId, method_id } }).dump().c_str());
-	fflush(stdout);
-}
-
-
-LengthEncodedMessage get_message_with_encoded_length(const char* message)
-{
-	size_t original_message_len = strlen(message);
-	unsigned long message_len = original_message_len + 4;
-	char *length_encoded_message = new char[message_len];
-	unsigned long packed_length = htonl(original_message_len);
-	size_t packed_length_size = sizeof(packed_length);
-	memcpy(length_encoded_message, &packed_length, packed_length_size);
-	memcpy(length_encoded_message + packed_length_size, message, original_message_len);
-	return { length_encoded_message, message_len };
+	print(json({{ "response", "Successfully uploaded file" },{ kId, method_id }}));
 }
 
 LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string application_identifier, const char *device_identifier, std::string method_id)
@@ -974,8 +971,7 @@ void is_app_installed(std::string application_identifier, const char* device_ide
 		{
 			json livesync_app_info_json = to_json(&livesync_app_info, device_identifier);
 			livesync_app_info_json[kId] = method_id;
-			printf(livesync_app_info_json.dump().c_str());
-			fflush(stdout);
+			print(livesync_app_info_json);
 			return;
 		}
 	}
@@ -985,10 +981,7 @@ void is_app_installed(std::string application_identifier, const char* device_ide
 	{
 		json livesync_app_info_json = to_json(livesync_app_info, device_identifier);
 		livesync_app_info_json[kId] = method_id;
-		auto asd = get_message_with_encoded_length(livesync_app_info_json.dump().c_str());
-		//printf("%.*s", asd.length, asd.message);
-		fwrite(asd.message, asd.length, 1, stdout);
-		fflush(stdout);
+		print(livesync_app_info_json);
 	}
 	else
 	{
@@ -1012,21 +1005,16 @@ void device_log(const char* device_identifier, std::string method_id)
 		message["deviceId"] = device_identifier;
 		message[kMessage] = buffer;
 		message[kId] = method_id;
-		//printf(message.dump().c_str());
-		auto asd = get_message_with_encoded_length(message.dump().c_str());
-		if (asd.length == 269 + 4)
-		{
-			int a = 5;
-		}
-		fwrite(asd.message, asd.length, 1, stdout);
-		free(asd.message);
-		fflush(stdout);
+		print(message);
 	}
+
 	free(buffer);
 }
 
 int main()
 {
+	_setmode(_fileno(stdout), _O_BINARY);
+
 	RETURN_IF_FAILED_RESULT(load_dlls());
 
 	char *input = new char[200];
