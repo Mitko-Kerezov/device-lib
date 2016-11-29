@@ -17,30 +17,30 @@
 
 #pragma region Constants
 
-#define ADNCI_MSG_CONNECTED     1
-#define ADNCI_MSG_DISCONNECTED  2
-#define ADNCI_MSG_UNKNOWN       3
-#define ADNCI_MSG_TRUSTED       4
-#define kCFStringEncodingUTF8 0x08000100
-#define kAMDNotFoundError 0xe8000008
-#define kAMDAPIInternalError 0xe8000067
-#define APPLE_SERVICE_NOT_STARTED_ERROR_CODE 0xE8000063
+const unsigned kADNCIMessageConnected = 1;
+const unsigned kADNCIMessageDisconnected = 2;
+const unsigned kADNCIMessageUnknown = 3;
+const unsigned kADNCIMessageTrusted = 4;
+const unsigned kCFStringEncodingUTF8 = 0x08000100;
+const unsigned kAMDNotFoundError = 0xe8000008;
+const unsigned kAMDAPIInternalError = 0xe8000067;
+const unsigned kAppleServiceNotStartedErrorCode = 0xE8000063;
 
-#define APPLE_FILE_CONNECTION "com.apple.afc"
-#define INSTALLATION_PROXY "com.apple.mobile.installation_proxy"
-#define HOUSE_ARREST "com.apple.mobile.house_arrest"
-#define NOTIFICATION_PROXY "com.apple.mobile.notification_proxy"
-#define SYSLOG "com.apple.syslog_relay"
-#define MOBILE_IMAGE_MOUNTER "com.apple.mobile.mobile_image_mounter"
-#define DEBUG_SERVER "com.apple.debugserver"
+const char *kAppleFileConnection = "com.apple.afc";
+const char *kInstallationProxy = "com.apple.mobile.installation_proxy";
+const char *kHouseArrest = "com.apple.mobile.house_arrest";
+const char *kNotificationProxy = "com.apple.mobile.notification_proxy";
+const char *kSyslog = "com.apple.syslog_relay";
+const char *kMobileImageMounter = "com.apple.mobile.mobile_image_mounter";
+const char *kDebugServer = "com.apple.debugserver";
 
-#define UNREACHABLE_STATUS "Unreachable"
-#define CONNECTED_STATUS "Connected"
+const char *kUnreachableStatus = "Unreachable";
+const char *kConnectedStatus = "Connected";
 
-#define DEVICE_FOUND "deviceFound"
-#define DEVICE_LOST "deviceLost"
-#define DEVICE_TRUSTED "deviceTrusted"
-#define DEVICE_UNKNOWN "deviceUnknown"
+const char *kDeviceFound = "deviceFound";
+const char *kDeviceLost = "deviceLost";
+const char *kDeviceTrusted = "deviceTrusted";
+const char *kDeviceUnknown = "deviceUnknown";
 
 const char *kId = "id";
 const char *kNullMessageId = "null";
@@ -51,10 +51,11 @@ const int kAFCFileModeRead = 2;
 const int kAFCFileModeWrite = 3;
 const char *kPathSeparators = "/\\";
 const char kUnixPathSeparator = '/';
+const char *kEventString = "event";
+const char *kRefreshAppMessage = "com.telerik.app.refreshApp";
 
 const std::string file_prefix("file:///");
 
-#define EVENT_STR "event"
 
 #pragma endregion Constants
 
@@ -70,6 +71,11 @@ using json = nlohmann::json;
 struct LengthEncodedMessage {
 	char *message;
 	size_t length;
+
+	~LengthEncodedMessage()
+	{
+		free(message);
+	}
 };
 
 struct DeviceInfo {
@@ -267,7 +273,6 @@ void print(const char* str)
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(str);
 	fwrite(length_encoded_message.message, length_encoded_message.length, 1, stdout);
 	fflush(stdout);
-	free(length_encoded_message.message);
 }
 
 void print(json message)
@@ -380,11 +385,11 @@ const char *get_device_status(const DeviceInfo* device_info)
 	const char *result;
 	if (start_session(device_info))
 	{
-		result = UNREACHABLE_STATUS;
+		result = kUnreachableStatus;
 	}
 	else
 	{
-		result = CONNECTED_STATUS;
+		result = kConnectedStatus;
 	}
 
 	AMDeviceStopSession(device_info);
@@ -408,31 +413,31 @@ void device_notification_callback(const DevicePointer* device_ptr)
 	result["device_identifier"] = device_identifier;
 	switch (device_ptr->msg)
 	{
-		case ADNCI_MSG_CONNECTED:
+		case kADNCIMessageConnected:
 		{
 			devices[device_identifier] = { device_ptr->device_info };
-			result[EVENT_STR] = DEVICE_FOUND;
+			result[kEventString] = kDeviceFound;
 			get_device_properties(device_ptr->device_info, result);
 			break;
 		}
-		case ADNCI_MSG_DISCONNECTED:
+		case kADNCIMessageDisconnected:
 		{
 			if (devices.count(device_identifier))
 			{
 				devices.erase(device_identifier);
 			}
-			result[EVENT_STR] = DEVICE_LOST;
+			result[kEventString] = kDeviceLost;
 			break;
 		}
-		case ADNCI_MSG_UNKNOWN:
+		case kADNCIMessageUnknown:
 		{
-			result[EVENT_STR] = DEVICE_UNKNOWN;
+			result[kEventString] = kDeviceUnknown;
 			break;
 		}
-		case ADNCI_MSG_TRUSTED:
+		case kADNCIMessageTrusted:
 		{
 			devices[device_identifier] = { device_ptr->device_info };
-			result[EVENT_STR] = DEVICE_TRUSTED;
+			result[kEventString] = kDeviceTrusted;
 			get_device_properties(device_ptr->device_info, result);
 			break;
 		}
@@ -546,9 +551,9 @@ HANDLE start_house_arrest(const char* device_identifier, const char* application
 		return NULL;
 	}
 
-	if (devices[device_identifier].services.count(HOUSE_ARREST))
+	if (devices[device_identifier].services.count(kHouseArrest))
 	{
-		return devices[device_identifier].services[HOUSE_ARREST];
+		return devices[device_identifier].services[kHouseArrest];
 	}
 
 	HANDLE houseFd = NULL;
@@ -566,15 +571,15 @@ HANDLE start_house_arrest(const char* device_identifier, const char* application
 		return NULL;
 	}
 
-	devices[device_identifier].services[HOUSE_ARREST] = houseFd;
+	devices[device_identifier].services[kHouseArrest] = houseFd;
 	return houseFd;
 }
 
 afc_connection *get_afc_connection(const char* device_identifier, const char* application_identifier, std::string method_id)
 {
-	if (devices.count(device_identifier) && devices[device_identifier].services.count(APPLE_FILE_CONNECTION))
+	if (devices.count(device_identifier) && devices[device_identifier].services.count(kAppleFileConnection))
 	{
-		return (afc_connection *)devices[device_identifier].services[APPLE_FILE_CONNECTION];
+		return (afc_connection *)devices[device_identifier].services[kAppleFileConnection];
 	}
 
 	HANDLE houseFd = start_house_arrest(device_identifier, application_identifier, method_id);
@@ -586,7 +591,7 @@ afc_connection *get_afc_connection(const char* device_identifier, const char* ap
 	afc_connection afc_conn;
 	afc_connection* afc_conn_p = &afc_conn;
 	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCConnectionOpen(houseFd, 0, &afc_conn_p), "Could not open afc connection", method_id, NULL);
-	devices[device_identifier].services[APPLE_FILE_CONNECTION] = afc_conn_p;
+	devices[device_identifier].services[kAppleFileConnection] = afc_conn_p;
 	return afc_conn_p;
 }
 
@@ -598,7 +603,7 @@ void uninstall_application(std::string application_identifier, const char* devic
 		return;
 	}
 
-	HANDLE socket = start_service(device_identifier, INSTALLATION_PROXY, method_id);
+	HANDLE socket = start_service(device_identifier, kInstallationProxy, method_id);
 	if (!socket)
 	{
 		return;
@@ -879,7 +884,7 @@ void read_file(const char *device_identifier, const char *application_identifier
 
 LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string application_identifier, const char *device_identifier, std::string method_id)
 {
-	HANDLE socket = start_service(device_identifier, INSTALLATION_PROXY, method_id);
+	HANDLE socket = start_service(device_identifier, kInstallationProxy, method_id);
 	if (!socket)
 	{
 		return NULL;
@@ -910,7 +915,6 @@ LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string 
 	
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command);
 	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
-	free(length_encoded_message.message);
 	while (true)
 	{
 		std::map<std::string, boost::any> dict;
@@ -991,7 +995,7 @@ void is_app_installed(std::string application_identifier, const char* device_ide
 
 void device_log(const char* device_identifier, std::string method_id)
 {
-	HANDLE socket = start_service(device_identifier, SYSLOG, method_id);
+	HANDLE socket = start_service(device_identifier, kSyslog, method_id);
 	if (!socket)
 	{
 		return;
@@ -1009,6 +1013,38 @@ void device_log(const char* device_identifier, std::string method_id)
 	}
 
 	free(buffer);
+}
+
+void post_notification(const char* device_identifier, std::string notification_name, std::string method_id)
+{
+	HANDLE socket = start_service(device_identifier, kNotificationProxy, method_id);
+	if (!socket)
+	{
+		return;
+	}
+
+	if (!devices.count(device_identifier))
+	{
+		print_error("Device not found", method_id, kAMDNotFoundError);
+		return;
+	}
+
+	std::stringstream xml_command;
+	xml_command <<"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+						"<plist version=\"1.0\">"
+						"<dict>"
+							"<key>Command</key>"
+							"<string>PostNotification</string>"
+							"<key>Name</key>"
+							"<string>" + notification_name + "</string>"
+							"<key>ClientOptions</key>"
+							"<string></string>"
+						"</dict>"
+						"</plist>";
+	
+	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command.str().c_str());
+	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
 }
 
 int main()
@@ -1088,6 +1124,15 @@ int main()
 			{
 				std::string device_identifier = method_args[0].get<std::string>();
 				perform_detached_operation(device_log, device_identifier, method_id);
+			}
+			if (method_name == "notify")
+			{
+				for (json arg : method_args)
+				{
+					std::string device_identifier = arg.value("deviceId", "");
+					std::string notification_name = arg.value("notificationName", "");
+					post_notification(device_identifier.c_str(), notification_name.c_str(), method_id);
+				}
 			}
 			if (method_name == "exit")
 			{
