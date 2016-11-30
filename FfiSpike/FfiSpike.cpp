@@ -654,7 +654,7 @@ void install_application(std::string install_path, const char* device_identifier
 	CFStringRef cf_developer = create_CFString("Developer");
 	const void *keys_arr[] = { cf_package_type };
 	const void *values_arr[] = { cf_developer };
-	CFDictionaryRef options = (void *)CFDictionaryCreate(NULL, keys_arr, values_arr, 1, NULL, NULL);
+	CFDictionaryRef options = CFDictionaryCreate(NULL, keys_arr, values_arr, 1, NULL, NULL);
 
 	unsigned transfer_result = AMDeviceSecureTransferPath(0, devices[device_identifier].device_info, local_app_url, options, NULL, 0);
 	if (transfer_result) {
