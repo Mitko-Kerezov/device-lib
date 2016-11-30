@@ -162,7 +162,7 @@ typedef unsigned(__cdecl *afc_fileref_open)(afc_connection*, const char *, unsig
 typedef unsigned(__cdecl *afc_fileref_read)(afc_connection*, afc_file_ref*, void *, unsigned);
 typedef unsigned(__cdecl *afc_fileref_write)(afc_connection*, afc_file_ref, const void*, size_t);
 typedef unsigned(__cdecl *afc_fileref_close)(afc_connection*, afc_file_ref);
-typedef unsigned(__cdecl *device_start_house_arrest)(DeviceInfo*, CFStringRef, void*, HANDLE*, unsigned int*);
+typedef unsigned(__cdecl *device_start_house_arrest)(const DeviceInfo*, CFStringRef, void*, HANDLE*, unsigned int*);
 
 typedef CFDictionaryRef(__cdecl *cfdictionary_create)(void *, void*, void*, int, void*, void*);
 typedef void*(__cdecl *cfurl_create_with_string)(void *, CFStringRef, void*);
