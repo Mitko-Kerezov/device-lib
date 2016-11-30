@@ -171,6 +171,7 @@ typedef void*(__cdecl *cfurl_create_with_string)(void *, CFStringRef, void*);
 
 #pragma region Dll_Variable_Definitions
 
+device_notification_subscribe_ptr __AMDeviceNotificationSubscribe;
 HINSTANCE mobile_device_dll;
 HINSTANCE core_foundation_dll;
 device_copy_device_identifier __AMDeviceCopyDeviceIdentifier;
@@ -210,6 +211,7 @@ device_start_house_arrest __AMDeviceStartHouseArrestService;
 
 #pragma region Dll_Method_Definitions
 
+#define AMDeviceNotificationSubscribe GET_IF_EXISTS(__AMDeviceNotificationSubscribe, device_notification_subscribe_ptr, mobile_device_dll, "AMDeviceNotificationSubscribe")
 #define AMDeviceCopyDeviceIdentifier GET_IF_EXISTS(__AMDeviceCopyDeviceIdentifier, device_copy_device_identifier, mobile_device_dll, "AMDeviceCopyDeviceIdentifier")
 #define CFStringGetCStringPtr GET_IF_EXISTS(__CFStringGetCStringPtr, cfstring_get_c_string_ptr, core_foundation_dll, "CFStringGetCStringPtr")
 #define CFStringGetCString GET_IF_EXISTS(__CFStringGetCString, cfstring_get_c_string, core_foundation_dll, "CFStringGetCString")
@@ -489,7 +491,6 @@ int load_dlls()
 
 int subscribe_for_notifications()
 {
-	device_notification_subscribe_ptr AMDeviceNotificationSubscribe = (device_notification_subscribe_ptr)GetProcAddress(mobile_device_dll, "AMDeviceNotificationSubscribe");
 	HANDLE notify_function = NULL;
 	int result = AMDeviceNotificationSubscribe(device_notification_callback, 0, 0, 0, &notify_function);
 	if (result)
