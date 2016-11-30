@@ -9,9 +9,9 @@
 #include <ws2tcpip.h>
 
 #include "json.hpp"
-#include "PlistCpp\Plist.hpp"
-#include "PlistCpp\PlistDate.hpp"
-#include "PlistCpp\include\boost\any.hpp"
+#include "PlistCpp/Plist.hpp"
+#include "PlistCpp/PlistDate.hpp"
+#include "PlistCpp/include/boost/any.hpp"
 
 #pragma comment(lib, "Ws2_32.lib")
 
