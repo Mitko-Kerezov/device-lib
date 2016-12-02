@@ -44,6 +44,7 @@ const char *kDeviceUnknown = "deviceUnknown";
 
 const char *kId = "id";
 const char *kNullMessageId = "null";
+const char *kDeviceId = "deviceId";
 const char *kError = "error";
 const char *kMessage = "message";
 const char *kCode = "code";
@@ -876,7 +877,6 @@ void read_file(const char *device_identifier, const char *application_identifier
 	error_message << "Could not open file " << destination << " for writing";
 	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeRead, &file_ref), error_message.str().c_str(), method_id);
 	unsigned size_to_read = 1 << 3;
-	int size = 0;
 	void *buf = malloc(sizeof(size_t) * size_to_read);
 	AFCFileRefRead(afc_conn_p, &file_ref, buf, size_to_read);
 
@@ -1007,8 +1007,8 @@ void device_log(const char* device_identifier, std::string method_id)
 	while (bytes_read = recv((SOCKET)socket, buffer, 1024, 0))
 	{
 		json message;
-		message["deviceId"] = device_identifier;
-		message[kMessage] = buffer;
+		message[kDeviceId] = device_identifier;
+		message[kMessage] = std::string(buffer, bytes_read);
 		message[kId] = method_id;
 		print(message);
 	}
@@ -1079,7 +1079,7 @@ int main()
 				for (json arg : method_args)
 				{
 					std::string application_identifier = arg.value("appId", "");
-					std::string device_identifier = arg.value("deviceId", "");
+					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string path = arg.value("path", "");
 					list_files(device_identifier.c_str(), application_identifier.c_str(), path.c_str(), method_id);
 				}
@@ -1089,7 +1089,7 @@ int main()
 				for (json arg : method_args)
 				{
 					std::string application_identifier = arg.value("appId", "");
-					std::string device_identifier = arg.value("deviceId", "");
+					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string source = arg.value("source", "");
 					std::string destination = arg.value("destination", "");
 					std::vector<char> source_writable(source.begin(), source.end());
@@ -1102,7 +1102,7 @@ int main()
 				for (json arg : method_args)
 				{
 					std::string application_identifier = arg.value("appId", "");
-					std::string device_identifier = arg.value("deviceId", "");
+					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string destination = arg.value("destination", "");
 					delete_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str(), method_id);
 				}
@@ -1112,7 +1112,7 @@ int main()
 			//	for (json arg : method_args)
 			//	{
 			//		std::string application_identifier = arg.value("appId", "");
-			//		std::string device_identifier = arg.value("deviceId", "");
+			//		std::string device_identifier = arg.value(kDeviceId, "");
 			//		std::string destination = arg.value("destination", "");
 			//		read_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str());
 			//	}
@@ -1130,7 +1130,7 @@ int main()
 			{
 				for (json arg : method_args)
 				{
-					std::string device_identifier = arg.value("deviceId", "");
+					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string notification_name = arg.value("notificationName", "");
 					post_notification(device_identifier.c_str(), notification_name.c_str(), method_id);
 				}
