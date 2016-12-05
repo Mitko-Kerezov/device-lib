@@ -189,7 +189,7 @@ int start_session(const DeviceInfo* device_info)
 
 	RETURN_IF_FAILED_RESULT(AMDeviceValidatePairing(device_info));
 	RETURN_IF_FAILED_RESULT(AMDeviceStartSession(device_info));
-
+	
 	return 0;
 }
 
@@ -225,15 +225,14 @@ const char *get_device_status(const DeviceInfo* device_info)
 		result = kConnectedStatus;
 	}
 
-	AMDeviceStopSession(device_info);
-	AMDeviceDisconnect(device_info);
+	stop_session(device_info);
 	return result;
 }
 
 void get_device_properties(const DeviceInfo* device_info, json &result)
 {
 	result["status"] = get_device_status(device_info);
-    result["product_type"] = get_device_property_value(device_info, "ProductType");
+	result["product_type"] = get_device_property_value(device_info, "ProductType");
 	result["device_name"] = get_device_property_value(device_info, "DeviceName");
 	result["product_version"] = get_device_property_value(device_info, "ProductVersion");
 	result["device_color"] = get_device_property_value(device_info, "DeviceColor");
@@ -466,6 +465,9 @@ void uninstall_application(std::string application_identifier, const char* devic
 	else
 	{
 		print(json({{ "response", "Successfully uninstalled application" }, { kId, method_id }}));
+		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
+		devices[device_identifier].services.erase(kAppleFileConnection);
+		devices[device_identifier].services.erase(kHouseArrest);
 	}
 }
 
@@ -863,6 +865,7 @@ void device_log(const char* device_identifier, std::string method_id)
 	}
 
 	free(buffer);
+	stop_session(devices[device_identifier].device_info);
 }
 
 void post_notification(const char* device_identifier, std::string notification_name, std::string method_id)
@@ -941,8 +944,6 @@ int main()
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string source = arg.value("source", "");
 					std::string destination = arg.value("destination", "");
-//					std::vector<char> source_writable(source.begin(), source.end());
-//					source_writable.push_back('\0');
 					upload_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), destination.c_str(), method_id);
 				}
 			}
