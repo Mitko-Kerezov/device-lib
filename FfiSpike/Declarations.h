@@ -204,6 +204,8 @@ afc_fileref_close __AFCFileRefClose;
 
 #ifndef _WIN32
 
+#include <CoreFoundation/CoreFoundation.h>
+
 extern "C"
 {
     unsigned AMDeviceNotificationSubscribe(void(*f)(const DevicePointer*), long, long, long, HANDLE*);

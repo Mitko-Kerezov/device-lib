@@ -22,7 +22,6 @@
 
 #ifndef _WIN32
 #include <sys/socket.h>
-#include <CoreFoundation/CoreFoundation.h>
 #endif
 
 #pragma region Constants
