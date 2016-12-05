@@ -3,17 +3,21 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
+#ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+#pragma comment(lib, "Ws2_32.lib")
+
+#endif
 
 #include "json.hpp"
 #include "PlistCpp/Plist.hpp"
 #include "PlistCpp/PlistDate.hpp"
 #include "PlistCpp/include/boost/any.hpp"
 
-#pragma comment(lib, "Ws2_32.lib")
 
 #pragma region Constants
 
@@ -172,7 +176,6 @@ typedef void*(__cdecl *cfurl_create_with_string)(void *, CFStringRef, void*);
 
 #pragma region Dll_Variable_Definitions
 
-device_notification_subscribe_ptr __AMDeviceNotificationSubscribe;
 HINSTANCE mobile_device_dll;
 HINSTANCE core_foundation_dll;
 device_copy_device_identifier __AMDeviceCopyDeviceIdentifier;
@@ -212,7 +215,6 @@ device_start_house_arrest __AMDeviceStartHouseArrestService;
 
 #pragma region Dll_Method_Definitions
 
-#define AMDeviceNotificationSubscribe GET_IF_EXISTS(__AMDeviceNotificationSubscribe, device_notification_subscribe_ptr, mobile_device_dll, "AMDeviceNotificationSubscribe")
 #define AMDeviceCopyDeviceIdentifier GET_IF_EXISTS(__AMDeviceCopyDeviceIdentifier, device_copy_device_identifier, mobile_device_dll, "AMDeviceCopyDeviceIdentifier")
 #define CFStringGetCStringPtr GET_IF_EXISTS(__CFStringGetCStringPtr, cfstring_get_c_string_ptr, core_foundation_dll, "CFStringGetCStringPtr")
 #define CFStringGetCString GET_IF_EXISTS(__CFStringGetCString, cfstring_get_c_string, core_foundation_dll, "CFStringGetCString")
@@ -492,6 +494,7 @@ int load_dlls()
 
 int subscribe_for_notifications()
 {
+	device_notification_subscribe_ptr AMDeviceNotificationSubscribe = (device_notification_subscribe_ptr)GetProcAddress(mobile_device_dll, "AMDeviceNotificationSubscribe");
 	HANDLE notify_function = NULL;
 	int result = AMDeviceNotificationSubscribe(device_notification_callback, 0, 0, 0, &notify_function);
 	if (result)
@@ -877,6 +880,7 @@ void read_file(const char *device_identifier, const char *application_identifier
 	error_message << "Could not open file " << destination << " for writing";
 	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeRead, &file_ref), error_message.str().c_str(), method_id);
 	unsigned size_to_read = 1 << 3;
+	int size = 0;
 	void *buf = malloc(sizeof(size_t) * size_to_read);
 	AFCFileRefRead(afc_conn_p, &file_ref, buf, size_to_read);
 
