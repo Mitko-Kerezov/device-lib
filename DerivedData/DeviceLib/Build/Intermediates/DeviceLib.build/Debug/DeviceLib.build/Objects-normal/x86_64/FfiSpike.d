@@ -131,4 +131,5 @@ dependencies: /Users/blackdragon/FFiSpike/DeviceLib/FfiSpike/FfiSpike.cpp \
   FfiSpike/PlistCpp/include/boost/utility/enable_if.hpp \
   FfiSpike/PlistCpp/include/boost/type_traits/is_same.hpp \
   FfiSpike/PlistCpp/include/boost/cstdint.hpp \
-  /Users/blackdragon/FFiSpike/DeviceLib/FfiSpike/PlistCpp/PlistDate.hpp
+  /Users/blackdragon/FFiSpike/DeviceLib/FfiSpike/PlistCpp/PlistDate.hpp \
+  /Users/blackdragon/FFiSpike/DeviceLib/FfiSpike/Declarations.h

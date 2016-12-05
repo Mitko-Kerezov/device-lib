@@ -3,6 +3,8 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
+#include <sys/stat.h>
+#include <sys/socket.h>
 #ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
@@ -18,18 +20,23 @@
 #include "PlistCpp/PlistDate.hpp"
 #include "PlistCpp/include/boost/any.hpp"
 
+#ifndef _WIN32
+#include <CoreFoundation/CoreFoundation.h>
+#include "Declarations.h"
+#endif
 
 #pragma region Constants
-
 const unsigned kADNCIMessageConnected = 1;
 const unsigned kADNCIMessageDisconnected = 2;
 const unsigned kADNCIMessageUnknown = 3;
 const unsigned kADNCIMessageTrusted = 4;
+const unsigned kDeviceLogBytesToRead = 1 << 10;
+#ifdef _WIN32
 const unsigned kCFStringEncodingUTF8 = 0x08000100;
+#endif
 const unsigned kAMDNotFoundError = 0xe8000008;
 const unsigned kAMDAPIInternalError = 0xe8000067;
 const unsigned kAppleServiceNotStartedErrorCode = 0xE8000063;
-
 const char *kAppleFileConnection = "com.apple.afc";
 const char *kInstallationProxy = "com.apple.mobile.installation_proxy";
 const char *kHouseArrest = "com.apple.mobile.house_arrest";
@@ -65,95 +72,35 @@ const std::string file_prefix("file:///");
 
 #define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
 #define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, method_id, value) ; if((__result = (expr))) { print_error(error_msg, method_id, __result); return value; }
-#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, method_id) PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, method_id)
+#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, method_id) ; if(((expr))) { print_error(error_msg, method_id, __result); return; }
 #define GET_IF_EXISTS(variable, type, dll, method_name) (variable ? variable : variable = (type)GetProcAddress(dll, method_name))
 
 using json = nlohmann::json;
 
-#pragma region Data_Structures_Definition
-
-struct LengthEncodedMessage {
-	char *message;
-	size_t length;
-
-	~LengthEncodedMessage()
-	{
-		free(message);
-	}
-};
-
-struct DeviceInfo {
-	unsigned char unknown0[16]; /* 0 - zero */
-	unsigned int device_id;     /* 16 */
-	unsigned int product_id;    /* 20 - set to AMD_IPHONE_PRODUCT_ID */
-	char *serial;               /* 24 - set to AMD_IPHONE_SERIAL */
-	unsigned int unknown1;      /* 28 */
-	unsigned char unknown2[4];  /* 32 */
-	unsigned int lockdown_conn; /* 36 */
-	unsigned char unknown3[8];  /* 40 */
-};
-
-struct DevicePointer {
-	DeviceInfo* device_info;
-	unsigned msg;
-};
-
-struct LiveSyncApplicationInfo {
-	bool is_livesync_supported;
-	std::string application_identifier;
-	std::string configuration;
-};
-
-struct afc_connection {
-	unsigned int handle;            /* 0 */
-	unsigned int unknown0;          /* 4 */
-	unsigned char unknown1;         /* 8 */
-	unsigned char padding[3];       /* 9 */
-	unsigned int unknown2;          /* 12 */
-	unsigned int unknown3;          /* 16 */
-	unsigned int unknown4;          /* 20 */
-	unsigned int fs_block_size;     /* 24 */
-	unsigned int sock_block_size;   /* 28: always 0x3c */
-	unsigned int io_timeout;        /* 32: from AFCConnectionOpen, usu. 0 */
-	void *afc_lock;                 /* 36 */
-	unsigned int context;           /* 40 */
-};
-
-struct afc_dictionary {
-	unsigned char unknown[0];   /* size unknown */
-};
-
-struct afc_directory {
-	unsigned char unknown[0];   /* size unknown */
-};
-
-struct DeviceData {
-	DeviceInfo* device_info;
-	std::map<const char*, HANDLE> services;
-	std::vector<LiveSyncApplicationInfo> livesync_app_infos;
-};
-
-#pragma endregion Data_Structures_Definition
-
 #pragma region Dll_Type_Definitions
 
-typedef unsigned long long afc_file_ref;
+typedef unsigned(__cdecl *device_notification_subscribe_ptr)(void(*f)(const DevicePointer*), long, long, long, HANDLE*);
 
+#ifdef _WIN32
 typedef void(__cdecl *run_loop_ptr)();
 typedef void* CFStringRef;
 typedef void* CFURLRef;
 typedef void* CFDictionaryRef;
-typedef unsigned(__cdecl *device_notification_subscribe_ptr)(void(*f)(const DevicePointer*), long, long, long, HANDLE*);
 typedef void*(__cdecl *device_copy_device_identifier)(const DeviceInfo*);
 typedef void*(__cdecl *device_copy_value)(const DeviceInfo*, CFStringRef, CFStringRef);
 typedef unsigned(__cdecl *device_uninstall_application)(HANDLE, CFStringRef, void*, void(*f)(), void*);
 typedef unsigned(__cdecl *device_connection_operation)(const DeviceInfo*);
 typedef unsigned(__cdecl *device_start_service)(const DeviceInfo*, CFStringRef, HANDLE*, void*);
-typedef char*(__cdecl *cfstring_get_c_string_ptr)(void*, unsigned);
+typedef const char*(__cdecl *cfstring_get_c_string_ptr)(void*, unsigned);
 typedef bool(__cdecl *cfstring_get_c_string)(void*, char*, unsigned, unsigned);
 typedef CFStringRef(__cdecl *cfstring_create_with_cstring)(void*, const char*, unsigned);
 typedef unsigned(__cdecl *device_secure_operation_with_path)(int, const DeviceInfo*, CFURLRef, CFDictionaryRef, void(*f)(), int);
 typedef void(__cdecl *cfrelease)(CFStringRef);
+typedef unsigned(__cdecl *device_start_house_arrest)(DeviceInfo*, CFStringRef, void*, HANDLE*, unsigned int*);
+
+typedef CFDictionaryRef(__cdecl *cfdictionary_create)(void *, void*, void*, int, void*, void*);
+typedef void*(__cdecl *cfurl_create_with_string)(void *, CFStringRef, void*);
+
 typedef unsigned(__cdecl *afc_connection_open)(HANDLE, const char*, void*);
 typedef unsigned(__cdecl *afc_connection_close)(afc_connection*);
 typedef unsigned(__cdecl *afc_file_info_open)(afc_connection*, const char*, afc_dictionary**);
@@ -166,21 +113,17 @@ typedef unsigned(__cdecl *afc_fileref_open)(afc_connection*, const char *, unsig
 typedef unsigned(__cdecl *afc_fileref_read)(afc_connection*, afc_file_ref*, void *, unsigned);
 typedef unsigned(__cdecl *afc_fileref_write)(afc_connection*, afc_file_ref, const void*, size_t);
 typedef unsigned(__cdecl *afc_fileref_close)(afc_connection*, afc_file_ref);
-typedef unsigned(__cdecl *device_start_house_arrest)(DeviceInfo*, CFStringRef, void*, HANDLE*, unsigned int*);
 
-typedef CFDictionaryRef(__cdecl *cfdictionary_create)(void *, void*, void*, int, void*, void*);
-typedef void*(__cdecl *cfurl_create_with_string)(void *, CFStringRef, void*);
-
+#endif
 #pragma endregion Dll_Type_Definitions
 
 #pragma region Dll_Variable_Definitions
 
+#ifdef _WIN32
 HINSTANCE mobile_device_dll;
 HINSTANCE core_foundation_dll;
+
 device_copy_device_identifier __AMDeviceCopyDeviceIdentifier;
-cfstring_get_c_string_ptr __CFStringGetCStringPtr;
-cfstring_get_c_string __CFStringGetCString;
-cfstring_create_with_cstring __CFStringCreateWithCString;
 device_copy_value __AMDeviceCopyValue;
 device_start_service __AMDeviceStartService;
 device_uninstall_application __AMDeviceUninstallApplication;
@@ -193,9 +136,15 @@ device_connection_operation __AMDevicePair;
 device_connection_operation __AMDeviceValidatePairing;
 device_secure_operation_with_path __AMDeviceSecureTransferPath;
 device_secure_operation_with_path __AMDeviceSecureInstallApplication;
+device_start_house_arrest __AMDeviceStartHouseArrestService;
+
+cfstring_get_c_string_ptr __CFStringGetCStringPtr;
+cfstring_get_c_string __CFStringGetCString;
+cfstring_create_with_cstring __CFStringCreateWithCString;
 cfurl_create_with_string __CFURLCreateWithString;
 cfdictionary_create __CFDictionaryCreate;
 cfrelease __CFRelease;
+
 afc_connection_open __AFCConnectionOpen;
 afc_connection_close __AFCConnectionClose;
 afc_file_info_open __AFCFileInfoOpen;
@@ -208,16 +157,14 @@ afc_fileref_open __AFCFileRefOpen;
 afc_fileref_read __AFCFileRefRead;
 afc_fileref_write __AFCFileRefWrite;
 afc_fileref_close __AFCFileRefClose;
-device_start_house_arrest __AMDeviceStartHouseArrestService;
+#endif
 
 #pragma endregion Dll_Variable_Definitions
 
 #pragma region Dll_Method_Definitions
 
+#ifdef _WIN32
 #define AMDeviceCopyDeviceIdentifier GET_IF_EXISTS(__AMDeviceCopyDeviceIdentifier, device_copy_device_identifier, mobile_device_dll, "AMDeviceCopyDeviceIdentifier")
-#define CFStringGetCStringPtr GET_IF_EXISTS(__CFStringGetCStringPtr, cfstring_get_c_string_ptr, core_foundation_dll, "CFStringGetCStringPtr")
-#define CFStringGetCString GET_IF_EXISTS(__CFStringGetCString, cfstring_get_c_string, core_foundation_dll, "CFStringGetCString")
-#define CFStringCreateWithCString GET_IF_EXISTS(__CFStringCreateWithCString, cfstring_create_with_cstring, core_foundation_dll, "CFStringCreateWithCString")
 #define AMDeviceCopyValue GET_IF_EXISTS(__AMDeviceCopyValue, device_copy_value, mobile_device_dll, "AMDeviceCopyValue")
 #define AMDeviceStartService GET_IF_EXISTS(__AMDeviceStartService, device_start_service, mobile_device_dll, "AMDeviceStartService")
 #define AMDeviceUninstallApplication GET_IF_EXISTS(__AMDeviceUninstallApplication, device_uninstall_application, mobile_device_dll, "AMDeviceUninstallApplication")
@@ -230,9 +177,15 @@ device_start_house_arrest __AMDeviceStartHouseArrestService;
 #define AMDeviceValidatePairing GET_IF_EXISTS(__AMDeviceValidatePairing, device_connection_operation, mobile_device_dll, "AMDeviceValidatePairing")
 #define AMDeviceSecureTransferPath GET_IF_EXISTS(__AMDeviceSecureTransferPath, device_secure_operation_with_path, mobile_device_dll, "AMDeviceSecureTransferPath")
 #define AMDeviceSecureInstallApplication GET_IF_EXISTS(__AMDeviceSecureInstallApplication, device_secure_operation_with_path, mobile_device_dll, "AMDeviceSecureInstallApplication")
+#define AMDeviceStartHouseArrestService GET_IF_EXISTS(__AMDeviceStartHouseArrestService, device_start_house_arrest, mobile_device_dll, "AMDeviceStartHouseArrestService")
+
+#define CFStringGetCStringPtr GET_IF_EXISTS(__CFStringGetCStringPtr, cfstring_get_c_string_ptr, core_foundation_dll, "CFStringGetCStringPtr")
+#define CFStringGetCString GET_IF_EXISTS(__CFStringGetCString, cfstring_get_c_string, core_foundation_dll, "CFStringGetCString")
+#define CFStringCreateWithCString GET_IF_EXISTS(__CFStringCreateWithCString, cfstring_create_with_cstring, core_foundation_dll, "CFStringCreateWithCString")
 #define CFURLCreateWithString GET_IF_EXISTS(__CFURLCreateWithString, cfurl_create_with_string, core_foundation_dll, "CFURLCreateWithString")
 #define CFDictionaryCreate GET_IF_EXISTS(__CFDictionaryCreate, cfdictionary_create, core_foundation_dll, "CFDictionaryCreate")
 #define CFRelease GET_IF_EXISTS(__CFRelease, cfrelease, core_foundation_dll, "CFRelease")
+
 #define AFCConnectionOpen GET_IF_EXISTS(__AFCConnectionOpen, afc_connection_open, mobile_device_dll, "AFCConnectionOpen")
 #define AFCConnectionClose GET_IF_EXISTS(__AFCConnectionClose, afc_connection_close, mobile_device_dll, "AFCConnectionClose")
 #define AFCRemovePath GET_IF_EXISTS(__AFCRemovePath, afc_remove_path, mobile_device_dll, "AFCRemovePath")
@@ -245,7 +198,7 @@ device_start_house_arrest __AMDeviceStartHouseArrestService;
 #define AFCFileRefRead GET_IF_EXISTS(__AFCFileRefRead, afc_fileref_read, mobile_device_dll, "AFCFileRefRead")
 #define AFCFileRefWrite GET_IF_EXISTS(__AFCFileRefWrite, afc_fileref_write, mobile_device_dll, "AFCFileRefWrite")
 #define AFCFileRefClose GET_IF_EXISTS(__AFCFileRefClose, afc_fileref_close, mobile_device_dll, "AFCFileRefClose")
-#define AMDeviceStartHouseArrestService GET_IF_EXISTS(__AMDeviceStartHouseArrestService, device_start_house_arrest, mobile_device_dll, "AMDeviceStartHouseArrestService")
+#endif
 
 #pragma endregion Dll_Method_Definitions
 
@@ -266,7 +219,7 @@ LengthEncodedMessage get_message_with_encoded_length(const char* message)
 	unsigned long message_len = original_message_len + 4;
 	char *length_encoded_message = new char[message_len];
 	unsigned long packed_length = htonl(original_message_len);
-	size_t packed_length_size = sizeof(packed_length);
+    size_t packed_length_size = 4;// ssizeof(packed_length);
 	memcpy(length_encoded_message, &packed_length, packed_length_size);
 	memcpy(length_encoded_message + packed_length_size, message, original_message_len);
 	return{ length_encoded_message, message_len };
@@ -332,7 +285,7 @@ std::string windows_path_to_unix(const char *path)
 
 const char* get_cstring_from_cfstring(CFStringRef cfstring)
 {
-	char* device_identifier = CFStringGetCStringPtr(cfstring, kCFStringEncodingUTF8);
+	const char* device_identifier = CFStringGetCStringPtr(cfstring, kCFStringEncodingUTF8);
 	char* device_identifier_buffer = new char[200];
 	if (device_identifier == NULL)
 	{
@@ -404,7 +357,7 @@ const char *get_device_status(const DeviceInfo* device_info)
 void get_device_properties(const DeviceInfo* device_info, json &result)
 {
 	result["status"] = get_device_status(device_info);
-	result["product_type"] = get_device_property_value(device_info, "ProductType");;
+    result["product_type"] = get_device_property_value(device_info, "ProductType");
 	result["device_name"] = get_device_property_value(device_info, "DeviceName");
 	result["product_version"] = get_device_property_value(device_info, "ProductVersion");
 	result["device_color"] = get_device_property_value(device_info, "DeviceColor");
@@ -450,6 +403,27 @@ void device_notification_callback(const DevicePointer* device_ptr)
 	print(result);
 }
 
+
+void print_error(const char *message, std::string method_id, int code =
+#ifdef _WIN32
+                 GetLastError()
+#else
+                 kAMDNotFoundError
+#endif
+
+)
+{
+    json exception;
+    exception[kError][kMessage] = message;
+    exception[kError][kCode] = code;
+    exception[kId] = method_id;
+    //Decided it's a better idea to print everything to stdout
+    //Not a good practice, but the client process wouldn't have to monitor both streams
+    //fprintf(stderr, "%s", exception.dump().c_str());
+    print(exception);
+}
+
+#ifdef _WIN32
 void add_dll_paths_to_environment()
 {
 	std::string str(std::getenv("PATH"));
@@ -457,18 +431,6 @@ void add_dll_paths_to_environment()
 	str = str.append(";C:\\Program Files (x86)\\Common Files\\Apple\\Apple Application Support;C:\\Program Files (x86)\\Common Files\\Apple\\Mobile Device Support;");
 
 	SetEnvironmentVariable("PATH", str.c_str());
-}
-
-void print_error(const char *message, std::string method_id, int code = GetLastError())
-{
-	json exception;
-	exception[kError][kMessage] = message;
-	exception[kError][kCode] = code;
-	exception[kId] = method_id;
-	//Decided it's a better idea to print everything to stdout
-	//Not a good practice, but the client process wouldn't have to monitor both streams
-	//fprintf(stderr, "%s", exception.dump().c_str());
-	print(exception);
 }
 
 int load_dlls()
@@ -491,9 +453,10 @@ int load_dlls()
 	return 0;
 }
 
+#endif
+
 int subscribe_for_notifications()
 {
-	device_notification_subscribe_ptr AMDeviceNotificationSubscribe = (device_notification_subscribe_ptr)GetProcAddress(mobile_device_dll, "AMDeviceNotificationSubscribe");
 	HANDLE notify_function = NULL;
 	int result = AMDeviceNotificationSubscribe(device_notification_callback, 0, 0, 0, &notify_function);
 	if (result)
@@ -512,8 +475,10 @@ void start_run_loop()
 	{
 		return;
 	}
-
+    
+#ifdef _WIN32
 	run_loop_ptr CFRunLoopRun = (run_loop_ptr)GetProcAddress(core_foundation_dll, "CFRunLoopRun");
+#endif
 	CFRunLoopRun();
 }
 
@@ -636,16 +601,22 @@ void install_application(std::string install_path, const char* device_identifier
 		return;
 	}
 
+#ifdef _WIN32
 	if (install_path.compare(0, file_prefix.size(), file_prefix))
 	{
 		install_path = file_prefix + install_path;
 	}
 	windows_path_to_unix(install_path);
-
+#endif
 	start_session(devices[device_identifier].device_info);
 
 	CFStringRef path = create_CFString(install_path.c_str());
-	CFURLRef local_app_url = CFURLCreateWithString(NULL, path, NULL);
+	CFURLRef local_app_url =
+#ifdef _WIN32
+    CFURLCreateWithString(NULL, path, NULL)
+#else
+    CFURLCreateWithFileSystemPath(NULL, path, kCFURLPOSIXPathStyle, true);
+#endif
 	CFRelease(path);
 	if (!local_app_url) {
 		stop_session(devices[device_identifier].device_info);
@@ -657,7 +628,7 @@ void install_application(std::string install_path, const char* device_identifier
 	CFStringRef cf_developer = create_CFString("Developer");
 	const void *keys_arr[] = { cf_package_type };
 	const void *values_arr[] = { cf_developer };
-	CFDictionaryRef options = (void *)CFDictionaryCreate(NULL, keys_arr, values_arr, 1, NULL, NULL);
+	CFDictionaryRef options = CFDictionaryCreate(NULL, keys_arr, values_arr, 1, NULL, NULL);
 
 	unsigned transfer_result = AMDeviceSecureTransferPath(0, devices[device_identifier].device_info, local_app_url, options, NULL, 0);
 	if (transfer_result) {
@@ -711,7 +682,7 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 
 	afc_directory afc_dir;
 	afc_directory* afc_dir_p = &afc_dir;
-	int err = AFCDirectoryOpen(afc_conn_p, dir, &afc_dir_p);
+	unsigned err = AFCDirectoryOpen(afc_conn_p, dir, &afc_dir_p);
 
 	if (err != 0)
 	{
@@ -805,7 +776,7 @@ bool ensure_device_path_exists(std::string &device_path, afc_connection *connect
 	return true;
 }
 
-void upload_file(const char *device_identifier, const char *application_identifier, char *source, const char *destination, std::string method_id) {
+void upload_file(const char *device_identifier, const char *application_identifier, const char *source, const char *destination, std::string method_id) {
 	afc_file_ref file_ref;
 	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
 	if (!afc_conn_p)
@@ -879,7 +850,6 @@ void read_file(const char *device_identifier, const char *application_identifier
 	error_message << "Could not open file " << destination << " for writing";
 	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeRead, &file_ref), error_message.str().c_str(), method_id);
 	unsigned size_to_read = 1 << 3;
-	int size = 0;
 	void *buf = malloc(sizeof(size_t) * size_to_read);
 	AFCFileRefRead(afc_conn_p, &file_ref, buf, size_to_read);
 
@@ -1005,9 +975,9 @@ void device_log(const char* device_identifier, std::string method_id)
 		return;
 	}
 
-	char *buffer = new char[1024];
+	char *buffer = new char[kDeviceLogBytesToRead];
 	int bytes_read; 
-	while (bytes_read = recv((SOCKET)socket, buffer, 1024, 0))
+	while (bytes_read = recv((SOCKET)socket, buffer, kDeviceLogBytesToRead, 0))
 	{
 		json message;
 		message["deviceId"] = device_identifier;
@@ -1053,12 +1023,12 @@ void post_notification(const char* device_identifier, std::string notification_n
 
 int main()
 {
+#ifdef _WIN32
 	_setmode(_fileno(stdout), _O_BINARY);
-
+    
 	RETURN_IF_FAILED_RESULT(load_dlls());
-
-	char *input = new char[200];
-
+#endif
+    
 	std::thread([]() { start_run_loop(); }).detach();
 	
 	for (std::string line; std::getline(std::cin, line);)
@@ -1095,9 +1065,9 @@ int main()
 					std::string device_identifier = arg.value("deviceId", "");
 					std::string source = arg.value("source", "");
 					std::string destination = arg.value("destination", "");
-					std::vector<char> source_writable(source.begin(), source.end());
-					source_writable.push_back('\0');
-					upload_file(device_identifier.c_str(), application_identifier.c_str(), &source_writable[0], destination.c_str(), method_id);
+//					std::vector<char> source_writable(source.begin(), source.end());
+//					source_writable.push_back('\0');
+					upload_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), destination.c_str(), method_id);
 				}
 			}
 			if (method_name == "delete")
