@@ -308,6 +308,7 @@
 		7038CB391DEEDB4C00A3D335 /* pugiconfig.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = pugiconfig.hpp; sourceTree = "<group>"; };
 		7038CB3A1DEEDB4C00A3D335 /* pugixml.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = pugixml.cpp; sourceTree = "<group>"; };
 		7038CB3B1DEEDB4C00A3D335 /* pugixml.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = pugixml.hpp; sourceTree = "<group>"; };
+		7038CB401DEEF31400A3D335 /* Declarations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Declarations.h; sourceTree = "<group>"; };
 		70F6ADAB1DEEB71300DD4722 /* DeviceLib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = DeviceLib; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -332,6 +333,7 @@
 				7038C9F21DEEDB4C00A3D335 /* FfiSpike.vcxproj.filters */,
 				7038C9F31DEEDB4C00A3D335 /* json.hpp */,
 				7038C9F41DEEDB4C00A3D335 /* PlistCpp */,
+				7038CB401DEEF31400A3D335 /* Declarations.h */,
 			);
 			path = FfiSpike;
 			sourceTree = "<group>";
