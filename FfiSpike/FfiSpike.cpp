@@ -107,7 +107,7 @@ void print(const char* str)
 	fflush(stdout);
 }
 
-void print(json message)
+void print(json& message)
 {
 	std::string str = message.dump();
 	print(str.c_str());
@@ -733,39 +733,38 @@ void read_file(const char *device_identifier, const char *application_identifier
 	print(json({{ "response", "Successfully uploaded file" },{ kId, method_id }}));
 }
 
-LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string application_identifier, const char *device_identifier, std::string method_id)
+void get_application_infos(const char *device_identifier, std::string method_id)
 {
 	HANDLE socket = start_service(device_identifier, kInstallationProxy, method_id);
 	if (!socket)
 	{
-		return NULL;
+		return;
 	}
 
-	int result_index = -1;
-	int current_index = -1;
-	devices[device_identifier].livesync_app_infos.clear();
 	const char *xml_command = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
-						"<plist version=\"1.0\">"
-						"<dict>"
-							"<key>Command</key>"
-							"<string>Browse</string>"
-							"<key>ClientOptions</key>"
-							"<dict>"
-								"<key>ApplicationType</key>"
-								"<string>User</string>"
-								"<key>ReturnAttributes</key>"
-								"<array>"
-									"<string>CFBundleIdentifier</string>"
-									"<string>IceniumLiveSyncEnabled</string>"
-									"<string>configuration</string>"
-								"</array>"
-							"</dict>"
-						"</dict>"
-						"</plist>";
-	
+							"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+							"<plist version=\"1.0\">"
+								"<dict>"
+									"<key>Command</key>"
+									"<string>Browse</string>"
+									"<key>ClientOptions</key>"
+									"<dict>"
+										"<key>ApplicationType</key>"
+										"<string>User</string>"
+										"<key>ReturnAttributes</key>"
+										"<array>"
+											"<string>CFBundleIdentifier</string>"
+											"<string>IceniumLiveSyncEnabled</string>"
+											"<string>configuration</string>"
+										"</array>"
+									"</dict>"
+								"</dict>"
+							"</plist>";
+
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command);
 	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
+
+	std::vector<json> livesync_app_infos;
 	while (true)
 	{
 		std::map<std::string, boost::any> dict;
@@ -777,7 +776,7 @@ LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string 
 		bytes_read = recv((SOCKET)socket, buffer, res, 0);
 		Plist::readPlist(buffer, res, dict);
 		free(buffer);
-		PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count("Error"), boost::any_cast<std::string>(dict["Error"]).c_str(), method_id, NULL);
+		PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(dict.count("Error"), boost::any_cast<std::string>(dict["Error"]).c_str(), method_id);
 		if (dict.count("Status") && boost::any_cast<std::string>(dict["Status"]) == "Complete")
 		{
 			break;
@@ -786,62 +785,16 @@ LiveSyncApplicationInfo* get_applications_livesync_supported_status(std::string 
 		for (boost::any list : current_list)
 		{
 			std::map<std::string, boost::any> app_info = boost::any_cast<std::map<std::string, boost::any>>(list);
-			LiveSyncApplicationInfo current_info = {
-				app_info.count("IceniumLiveSyncEnabled") && boost::any_cast<bool>(app_info["IceniumLiveSyncEnabled"]),
-				app_info.count("CFBundleIdentifier") ? boost::any_cast<std::string>(app_info["CFBundleIdentifier"]) : "",
-				app_info.count("configuration") ? boost::any_cast<std::string>(app_info["configuration"]) : "",
+			json current_info = {
+				{ "IceniumLiveSyncEnabled", app_info.count("IceniumLiveSyncEnabled") && boost::any_cast<bool>(app_info["IceniumLiveSyncEnabled"]) },
+				{ "CFBundleIdentifier", app_info.count("CFBundleIdentifier") ? boost::any_cast<std::string>(app_info["CFBundleIdentifier"]) : "" },
+				{ "configuration", app_info.count("configuration") ? boost::any_cast<std::string>(app_info["configuration"]) : ""},
 			};
-			devices[device_identifier].livesync_app_infos.push_back(current_info);
-			++current_index;
-			if (current_info.application_identifier == application_identifier)
-			{
-				result_index = current_index;
-			}
+			livesync_app_infos.push_back(current_info);
 		}
 	}
 
-	return result_index == -1 ? NULL : &devices[device_identifier].livesync_app_infos[result_index];
-}
-
-json to_json(LiveSyncApplicationInfo* info, const char* device_identifier)
-{
-	json result;
-	result["device_identifier"] = device_identifier;
-	result["configuration"] = info->configuration;
-	result["is_livesync_supported"] = info->is_livesync_supported;
-	return result;
-}
-
-void is_app_installed(std::string application_identifier, const char* device_identifier, std::string method_id)
-{
-	if (!devices.count(device_identifier))
-	{
-		print_error("Device not found", method_id, kAMDNotFoundError);
-		return;
-	}
-
-	for (LiveSyncApplicationInfo livesync_app_info : devices[device_identifier].livesync_app_infos)
-	{
-		if (livesync_app_info.application_identifier == application_identifier)
-		{
-			json livesync_app_info_json = to_json(&livesync_app_info, device_identifier);
-			livesync_app_info_json[kId] = method_id;
-			print(livesync_app_info_json);
-			return;
-		}
-	}
-
-	LiveSyncApplicationInfo *livesync_app_info = get_applications_livesync_supported_status(application_identifier, device_identifier, method_id);
-	if (livesync_app_info)
-	{
-		json livesync_app_info_json = to_json(livesync_app_info, device_identifier);
-		livesync_app_info_json[kId] = method_id;
-		print(livesync_app_info_json);
-	}
-	else
-	{
-		print_error("App not installed", method_id, kAMDNotFoundError);
-	}
+	print(json({ { "apps", livesync_app_infos }, { kId, method_id } }));
 }
 
 void device_log(const char* device_identifier, std::string method_id)
@@ -966,9 +919,10 @@ int main()
 			//		read_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str());
 			//	}
 			//}*/
-			if (method_name == "isInstalled")
+			if (method_name == "apps")
 			{
-				perform_detached_operation(is_app_installed, method_args, method_id);
+				std::string device_identifier = method_args[0].get<std::string>();
+				perform_detached_operation(get_application_infos, device_identifier, method_id);
 			}
 			if (method_name == "log")
 			{

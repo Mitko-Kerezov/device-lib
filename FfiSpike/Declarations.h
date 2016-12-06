@@ -69,7 +69,6 @@ struct afc_directory {
 struct DeviceData {
     DeviceInfo* device_info;
     std::map<const char*, HANDLE> services;
-    std::vector<LiveSyncApplicationInfo> livesync_app_infos;
 };
 
 #pragma endregion Data_Structures_Definition
