@@ -71,8 +71,8 @@ const std::string file_prefix("file:///");
 #pragma endregion Constants
 
 #define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
-#define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, method_id, value) ; if((__result = (expr))) { print_error(error_msg, method_id, __result); return value; }
-#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, method_id) ; if(((expr))) { print_error(error_msg, method_id, __result); return; }
+#define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id, value) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return value; }
+#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if(((expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
 #define GET_IF_EXISTS(variable, type, dll, method_name) (variable ? variable : variable = (type)GetProcAddress(dll, method_name))
 
 using json = nlohmann::json;
@@ -241,7 +241,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 {
 	const char *device_identifier = get_cstring_from_cfstring(AMDeviceCopyDeviceIdentifier(device_ptr->device_info));
 	json result;
-	result["device_identifier"] = device_identifier;
+	result[kDeviceId] = device_identifier;
 	switch (device_ptr->msg)
 	{
 		case kADNCIMessageConnected:
@@ -278,7 +278,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 }
 
 
-void print_error(const char *message, std::string method_id, int code =
+void print_error(const char *message, const char* device_identifier, std::string method_id, int code =
 #ifdef _WIN32
                  GetLastError()
 #else
@@ -290,6 +290,7 @@ void print_error(const char *message, std::string method_id, int code =
 	json exception;
 	exception[kError][kMessage] = message;
 	exception[kError][kCode] = code;
+	exception[kDeviceId] = device_identifier;
 	exception[kId] = method_id;
 	//Decided it's a better idea to print everything to stdout
 	//Not a good practice, but the client process wouldn't have to monitor both streams
@@ -313,14 +314,14 @@ int load_dlls()
 	mobile_device_dll = LoadLibrary("MobileDevice.dll");
 	if (!mobile_device_dll)
 	{
-		print_error("Could not load MobileDevice.dll", kNullMessageId);
+		print_error("Could not load MobileDevice.dll", kNullMessageId, kNullMessageId);
 		return 1;
 	}
 
 	core_foundation_dll = LoadLibrary("CoreFoundation.dll");
 	if (!core_foundation_dll)
 	{
-		print_error("Could not load CoreFoundation.dll", kNullMessageId);
+		print_error("Could not load CoreFoundation.dll", kNullMessageId, kNullMessageId);
 		return 1;
 	}
 
@@ -335,7 +336,7 @@ int subscribe_for_notifications()
 	int result = AMDeviceNotificationSubscribe(device_notification_callback, 0, 0, 0, &notify_function);
 	if (result)
 	{
-		print_error("Could not attach notification callback", kNullMessageId);
+		print_error("Could not attach notification callback", kNullMessageId, kNullMessageId);
 	}
 
 	return result;
@@ -360,7 +361,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 {
 	if (!devices.count(device_identifier))
 	{
-		print_error("Device not found", method_id, kAMDNotFoundError);
+		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
 		return NULL;
 	}
 
@@ -370,7 +371,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 	}
 
 	HANDLE socket = NULL;
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(devices[device_identifier].device_info), "Could start device session", method_id, NULL);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(devices[device_identifier].device_info), "Could start device session", device_identifier, method_id, NULL);
 	CFStringRef cf_service_name = create_CFString(service_name);
 	unsigned result = AMDeviceStartService(devices[device_identifier].device_info, cf_service_name, &socket, NULL);
 	CFRelease(cf_service_name);
@@ -378,7 +379,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 	{
 		std::string message("Could not start service ");
 		message += service_name;
-		print_error(message.c_str(), method_id, result);
+		print_error(message.c_str(), device_identifier, method_id, result);
 		return NULL;
 	}
 
@@ -390,7 +391,7 @@ HANDLE start_house_arrest(const char* device_identifier, const char* application
 {
 	if (!devices.count(device_identifier))
 	{
-		print_error("Device not found", method_id, kAMDNotFoundError);
+		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
 		return NULL;
 	}
 
@@ -410,7 +411,7 @@ HANDLE start_house_arrest(const char* device_identifier, const char* application
 	{
 		std::string message("Could not start house arrest for application ");
 		message += application_identifier;
-		print_error(message.c_str(), method_id, result);
+		print_error(message.c_str(), device_identifier, method_id, result);
 		return NULL;
 	}
 
@@ -433,7 +434,7 @@ afc_connection *get_afc_connection(const char* device_identifier, const char* ap
 
 	afc_connection afc_conn;
 	afc_connection* afc_conn_p = &afc_conn;
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCConnectionOpen(houseFd, 0, &afc_conn_p), "Could not open afc connection", method_id, NULL);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCConnectionOpen(houseFd, 0, &afc_conn_p), "Could not open afc connection", device_identifier, method_id, NULL);
 	devices[device_identifier].services[kAppleFileConnection] = afc_conn_p;
 	return afc_conn_p;
 }
@@ -442,7 +443,7 @@ void uninstall_application(std::string application_identifier, const char* devic
 {
 	if (!devices.count(device_identifier))
 	{
-		print_error("Device not found", method_id, kAMDNotFoundError);
+		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
 		return;
 	}
 
@@ -459,11 +460,11 @@ void uninstall_application(std::string application_identifier, const char* devic
 
 	if (result)
 	{
-		print_error("Could not uninstall application", method_id, result);
+		print_error("Could not uninstall application", device_identifier, method_id, result);
 	}
 	else
 	{
-		print(json({{ "response", "Successfully uninstalled application" }, { kId, method_id }}));
+		print(json({{ "response", "Successfully uninstalled application" }, { kId, method_id }, { kDeviceId, device_identifier }}));
 		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
 		devices[device_identifier].services.erase(kAppleFileConnection);
 		devices[device_identifier].services.erase(kHouseArrest);
@@ -474,7 +475,7 @@ void install_application(std::string install_path, const char* device_identifier
 {
 	if (!devices.count(device_identifier))
 	{
-		print_error("Device not found", method_id, kAMDNotFoundError);
+		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
 		return;
 	}
 
@@ -497,7 +498,7 @@ void install_application(std::string install_path, const char* device_identifier
 	CFRelease(path);
 	if (!local_app_url) {
 		stop_session(devices[device_identifier].device_info);
-		print_error("Could not parse application path", method_id, kAMDAPIInternalError);
+		print_error("Could not parse application path", device_identifier, method_id, kAMDAPIInternalError);
 		return;
 	}
 
@@ -510,7 +511,7 @@ void install_application(std::string install_path, const char* device_identifier
 	unsigned transfer_result = AMDeviceSecureTransferPath(0, devices[device_identifier].device_info, local_app_url, options, NULL, 0);
 	if (transfer_result) {
 		stop_session(devices[device_identifier].device_info);
-		print_error("Could not transfer application", method_id, transfer_result);
+		print_error("Could not transfer application", device_identifier, method_id, transfer_result);
 		return;
 	}
 
@@ -521,11 +522,11 @@ void install_application(std::string install_path, const char* device_identifier
 
 	if (install_result)
 	{
-		print_error("Could not install application", method_id, install_result);
+		print_error("Could not install application", device_identifier, method_id, install_result);
 		return;
 	}
 
-	print(json({{ "response", "Successfully installed application" }, { kId, method_id }}));
+	print(json({ { "response", "Successfully installed application" }, { kId, method_id }, {kDeviceId, device_identifier}}));
 }
 
 void perform_detached_operation(void(*operation)(const char*, std::string), std::string arg, std::string method_id)
@@ -541,7 +542,7 @@ void perform_detached_operation(void(*operation)(std::string, const char*, std::
 		std::thread([operation, first_arg, device_identifier, method_id]() { operation(first_arg, device_identifier.c_str(), method_id);  }).detach();
 }
 
-void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::string method_id)
+void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::string method_id, const char* device_identifier)
 {
 	char *dir_ent;
 	files.push_back(dir);
@@ -553,7 +554,7 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 	{
 		std::string message("Could not open file info for file: ");
 		message += dir;
-		print_error(message.c_str(), method_id, afc_file_info_open_result);
+		print_error(message.c_str(), device_identifier, method_id, afc_file_info_open_result);
 		return;
 	}
 
@@ -581,14 +582,14 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 		if (dir_joined[strlen(dir) - 1] != '/')
 			strcat(dir_joined, "/");
 		strcat(dir_joined, dir_ent);
-		read_dir(afcFd, afc_conn_p, dir_joined, files, method_id);
+		read_dir(afcFd, afc_conn_p, dir_joined, files, method_id, device_identifier);
 		free(dir_joined);
 	}
 
 	unsigned afc_directory_close_result = AFCDirectoryClose(afc_conn_p, afc_dir_p);
 	if (afc_directory_close_result)
 	{
-		print_error("Could not close directory", method_id, afc_directory_close_result);
+		print_error("Could not close directory", device_identifier, method_id, afc_directory_close_result);
 	}
 }
 
@@ -605,14 +606,14 @@ void list_files(const char *device_identifier, const char *application_identifie
 	unsigned afc_connection_open_result = AFCConnectionOpen(houseFd, 0, &afc_conn_p);
 	if (afc_connection_open_result)
 	{
-		print_error("Could not establish AFC Connection", method_id, afc_connection_open_result);
+		print_error("Could not establish AFC Connection", device_identifier, method_id, afc_connection_open_result);
 		return;
 	}
 	json files;
 	
 	std::string device_path_str = windows_path_to_unix(device_path);
-	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, method_id);
-	print(json({{ "response", files }, { kId, method_id }}));
+	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, method_id, device_identifier);
+	print(json({{ "response", files }, { kId, method_id }, { kDeviceId, device_identifier }}));
 }
 
 void* read_file_to_memory(char * path, size_t* file_size)
@@ -636,7 +637,7 @@ void* read_file_to_memory(char * path, size_t* file_size)
 	return content;
 }
 
-bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id)
+bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id, const char * device_identifier)
 {
 	std::vector<std::string> directories = split(device_path, kUnixPathSeparator);
 	std::string curent_device_path("");
@@ -646,7 +647,7 @@ bool ensure_device_path_exists(std::string &device_path, afc_connection *connect
 		{
 			curent_device_path += kUnixPathSeparator;
 			curent_device_path += directory_path;
-			PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCDirectoryCreate(connection, curent_device_path.c_str()), "Unable to make directory", method_id, false)
+			PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCDirectoryCreate(connection, curent_device_path.c_str()), "Unable to make directory", device_identifier, method_id, false)
 		}
 	}
 
@@ -671,27 +672,27 @@ void upload_file(const char *device_identifier, const char *application_identifi
 		std::string destination_str =  windows_path_to_unix(destination);
 		destination = destination_str.c_str();
 		std::string dir_name = get_dirname(destination);
-		if (ensure_device_path_exists(dir_name, afc_conn_p, method_id))
+		if (ensure_device_path_exists(dir_name, afc_conn_p, method_id, device_identifier))
 		{
 			std::stringstream error_message;
 			AFCRemovePath(afc_conn_p, destination);
 			error_message << "Could not open file " << destination << " for writing";
-			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeWrite, &file_ref), error_message.str().c_str(), method_id);
+			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeWrite, &file_ref), error_message.str().c_str(), device_identifier, method_id);
 			error_message.str(std::string());
 			error_message << "Could not write to file: " << destination;
-			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefWrite(afc_conn_p, file_ref, &file_content[0], file_content.size()), error_message.str().c_str(), method_id);
+			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefWrite(afc_conn_p, file_ref, &file_content[0], file_content.size()), error_message.str().c_str(), device_identifier, method_id);
 			error_message.str(std::string());
 			error_message << "Could not close file reference: " << destination;
-			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(afc_conn_p, file_ref), error_message.str().c_str(), method_id);
+			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(afc_conn_p, file_ref), error_message.str().c_str(), device_identifier, method_id);
 			error_message.str(std::string());
-			print(json({{ "response", "Successfully uploaded file" },{ kId, method_id }}));
+			print(json({{ "response", "Successfully uploaded file" },{ kId, method_id },{ kDeviceId, device_identifier }}));
 		}
 	}
 	else 
 	{
 		std::string message("Could not open file: ");
 		message += source;
-		print_error(message.c_str(), method_id, kAMDAPIInternalError);
+		print_error(message.c_str(), device_identifier, method_id, kAMDAPIInternalError);
 	}
 }
 
@@ -708,8 +709,8 @@ void delete_file(const char *device_identifier, const char *application_identifi
 	destination = destination_str.c_str();
 	std::stringstream error_message;
 	error_message << "Could not remove file " << destination;
-	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCRemovePath(afc_conn_p, destination), error_message.str().c_str(), method_id);
-	print(json({{ "response", "Successfully removed file" },{ kId, method_id }}));
+	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCRemovePath(afc_conn_p, destination), error_message.str().c_str(), device_identifier, method_id);
+	print(json({{ "response", "Successfully removed file" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 void read_file(const char *device_identifier, const char *application_identifier, const char *destination, std::string method_id) {
@@ -725,12 +726,12 @@ void read_file(const char *device_identifier, const char *application_identifier
 	std::stringstream error_message;
 	AFCRemovePath(afc_conn_p, destination);
 	error_message << "Could not open file " << destination << " for writing";
-	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeRead, &file_ref), error_message.str().c_str(), method_id);
+	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeRead, &file_ref), error_message.str().c_str(), device_identifier, method_id);
 	unsigned size_to_read = 1 << 3;
 	void *buf = malloc(sizeof(size_t) * size_to_read);
 	AFCFileRefRead(afc_conn_p, &file_ref, buf, size_to_read);
 
-	print(json({{ "response", "Successfully uploaded file" },{ kId, method_id }}));
+	print(json({{ "response", "Successfully uploaded file" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 void get_application_infos(const char *device_identifier, std::string method_id)
@@ -776,7 +777,7 @@ void get_application_infos(const char *device_identifier, std::string method_id)
 		bytes_read = recv((SOCKET)socket, buffer, res, 0);
 		Plist::readPlist(buffer, res, dict);
 		free(buffer);
-		PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(dict.count("Error"), boost::any_cast<std::string>(dict["Error"]).c_str(), method_id);
+		PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(dict.count("Error"), boost::any_cast<std::string>(dict["Error"]).c_str(), device_identifier, method_id);
 		if (dict.count("Status") && boost::any_cast<std::string>(dict["Status"]) == "Complete")
 		{
 			break;
@@ -794,7 +795,7 @@ void get_application_infos(const char *device_identifier, std::string method_id)
 		}
 	}
 
-	print(json({ { "apps", livesync_app_infos }, { kId, method_id } }));
+	print(json({ { "apps", livesync_app_infos }, { kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 void device_log(const char* device_identifier, std::string method_id)
@@ -830,7 +831,7 @@ void post_notification(const char* device_identifier, std::string notification_n
 
 	if (!devices.count(device_identifier))
 	{
-		print_error("Device not found", method_id, kAMDNotFoundError);
+		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
 		return;
 	}
 
