@@ -72,7 +72,7 @@ const std::string file_prefix("file:///");
 
 #define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
 #define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id, value) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return value; }
-#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if(((expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
+#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
 #define GET_IF_EXISTS(variable, type, dll, method_name) (variable ? variable : variable = (type)GetProcAddress(dll, method_name))
 
 using json = nlohmann::json;
