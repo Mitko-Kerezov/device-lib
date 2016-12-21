@@ -107,7 +107,7 @@ void print(const char* str)
 	fflush(stdout);
 }
 
-void print(json& message)
+void print(const json& message)
 {
 	std::string str = message.dump();
 	print(str.c_str());
