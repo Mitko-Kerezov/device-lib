@@ -371,7 +371,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 	}
 
 	HANDLE socket = NULL;
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(devices[device_identifier].device_info), "Could start device session", device_identifier, method_id, NULL);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(devices[device_identifier].device_info), "Could not start device session", device_identifier, method_id, NULL);
 	CFStringRef cf_service_name = create_CFString(service_name);
 	unsigned result = AMDeviceStartService(devices[device_identifier].device_info, cf_service_name, &socket, NULL);
 	CFRelease(cf_service_name);
