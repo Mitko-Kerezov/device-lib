@@ -795,6 +795,8 @@ void get_application_infos(const char *device_identifier, std::string method_id)
 		}
 	}
 
+	stop_session(devices[device_identifier].device_info);
+
 	print(json({ { "apps", livesync_app_infos }, { kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
@@ -851,6 +853,7 @@ void post_notification(const char* device_identifier, std::string notification_n
 	
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command.str().c_str());
 	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
+	stop_session(devices[device_identifier].device_info);
 	print(json({ { "response", "Successfully sent notification" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
