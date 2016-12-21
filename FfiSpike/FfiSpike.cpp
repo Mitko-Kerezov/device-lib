@@ -851,6 +851,7 @@ void post_notification(const char* device_identifier, std::string notification_n
 	
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command.str().c_str());
 	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
+	print(json({ { "response", "Successfully sent notification" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 int main()
@@ -922,13 +923,17 @@ int main()
 			//}*/
 			if (method_name == "apps")
 			{
-				std::string device_identifier = method_args[0].get<std::string>();
-				perform_detached_operation(get_application_infos, device_identifier, method_id);
+				for (json device_identifier_json : method_args) {
+					std::string device_identifier = device_identifier_json.get<std::string>();
+					perform_detached_operation(get_application_infos, device_identifier, method_id);
+				}
 			}
 			if (method_name == "log")
 			{
-				std::string device_identifier = method_args[0].get<std::string>();
-				perform_detached_operation(device_log, device_identifier, method_id);
+				for (json device_identifier_json : method_args) {
+					std::string device_identifier = device_identifier_json.get<std::string>();
+					perform_detached_operation(device_log, device_identifier, method_id);
+				}
 			}
 			if (method_name == "notify")
 			{
