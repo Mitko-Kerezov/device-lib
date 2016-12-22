@@ -374,6 +374,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(devices[device_identifier].device_info), "Could not start device session", device_identifier, method_id, NULL);
 	CFStringRef cf_service_name = create_CFString(service_name);
 	unsigned result = AMDeviceStartService(devices[device_identifier].device_info, cf_service_name, &socket, NULL);
+	stop_session(devices[device_identifier].device_info);
 	CFRelease(cf_service_name);
 	if (result)
 	{
@@ -382,8 +383,8 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 		print_error(message.c_str(), device_identifier, method_id, result);
 		return NULL;
 	}
-
 	devices[device_identifier].services[service_name] = socket;
+
 	return socket;
 }
 
@@ -456,7 +457,6 @@ void uninstall_application(std::string application_identifier, const char* devic
 	CFStringRef appid_cfstring = create_CFString(application_identifier.c_str());
 	unsigned result = AMDeviceUninstallApplication(socket, appid_cfstring, NULL, [] {}, NULL);
 	CFRelease(appid_cfstring);
-	stop_session(devices[device_identifier].device_info);
 
 	if (result)
 	{
@@ -795,8 +795,6 @@ void get_application_infos(const char *device_identifier, std::string method_id)
 		}
 	}
 
-	stop_session(devices[device_identifier].device_info);
-
 	print(json({ { "apps", livesync_app_infos }, { kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
@@ -820,7 +818,6 @@ void device_log(const char* device_identifier, std::string method_id)
 	}
 
 	free(buffer);
-	stop_session(devices[device_identifier].device_info);
 }
 
 void post_notification(const char* device_identifier, std::string notification_name, std::string method_id)
@@ -853,7 +850,6 @@ void post_notification(const char* device_identifier, std::string notification_n
 	
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command.str().c_str());
 	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
-	stop_session(devices[device_identifier].device_info);
 	print(json({ { "response", "Successfully sent notification" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
