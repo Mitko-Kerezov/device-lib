@@ -69,6 +69,7 @@ struct afc_directory {
 struct DeviceData {
     DeviceInfo* device_info;
     std::map<const char*, HANDLE> services;
+	int sessions;
 };
 
 #pragma endregion Data_Structures_Definition

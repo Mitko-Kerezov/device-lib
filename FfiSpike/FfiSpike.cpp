@@ -178,44 +178,52 @@ CFStringRef create_CFString(const char* str)
 	return CFStringCreateWithCString(NULL, str, kCFStringEncodingUTF8);
 }
 
-int start_session(const DeviceInfo* device_info)
+int start_session(const char* device_identifier)
 {
-	RETURN_IF_FAILED_RESULT(AMDeviceConnect(device_info));
-	if (!AMDeviceIsPaired(device_info))
-	{
-		RETURN_IF_FAILED_RESULT(AMDevicePair(device_info));
+	if (devices[device_identifier].sessions < 1) {
+		const DeviceInfo* device_info = devices[device_identifier].device_info;
+		RETURN_IF_FAILED_RESULT(AMDeviceConnect(device_info));
+		if (!AMDeviceIsPaired(device_info))
+		{
+			RETURN_IF_FAILED_RESULT(AMDevicePair(device_info));
+		}
+
+		RETURN_IF_FAILED_RESULT(AMDeviceValidatePairing(device_info));
+		RETURN_IF_FAILED_RESULT(AMDeviceStartSession(device_info));
 	}
 
-	RETURN_IF_FAILED_RESULT(AMDeviceValidatePairing(device_info));
-	RETURN_IF_FAILED_RESULT(AMDeviceStartSession(device_info));
-	
+	++devices[device_identifier].sessions;
 	return 0;
 }
 
-void stop_session(const DeviceInfo *device_info)
+void stop_session(const char* device_identifier)
 {
-	AMDeviceStopSession(device_info);
-	AMDeviceDisconnect(device_info);
+	if (--devices[device_identifier].sessions < 1) {
+		const DeviceInfo *device_info = devices[device_identifier].device_info;
+		AMDeviceStopSession(device_info);
+		AMDeviceDisconnect(device_info);
+	}
 }
 
-const char *get_device_property_value(const DeviceInfo* device_info, char* property_name) 
+const char *get_device_property_value(const char* device_identifier, char* property_name)
 {
+	const DeviceInfo* device_info = devices[device_identifier].device_info;
 	const char *result = "";
-	if (!start_session(device_info))
+	if (!start_session(device_identifier))
 	{
 		CFStringRef cfstring = create_CFString(property_name);
 		result = get_cstring_from_cfstring(AMDeviceCopyValue(device_info, NULL, cfstring));
 		CFRelease(cfstring);
 	}
 
-	stop_session(device_info);
+	stop_session(device_identifier);
 	return result;
 }
 
-const char *get_device_status(const DeviceInfo* device_info)
+const char *get_device_status(const char* device_identifier)
 {
 	const char *result;
-	if (start_session(device_info))
+	if (start_session(device_identifier))
 	{
 		result = kUnreachableStatus;
 	}
@@ -224,17 +232,17 @@ const char *get_device_status(const DeviceInfo* device_info)
 		result = kConnectedStatus;
 	}
 
-	stop_session(device_info);
+	stop_session(device_identifier);
 	return result;
 }
 
-void get_device_properties(const DeviceInfo* device_info, json &result)
+void get_device_properties(const char* device_identifier, json &result)
 {
-	result["status"] = get_device_status(device_info);
-	result["product_type"] = get_device_property_value(device_info, "ProductType");
-	result["device_name"] = get_device_property_value(device_info, "DeviceName");
-	result["product_version"] = get_device_property_value(device_info, "ProductVersion");
-	result["device_color"] = get_device_property_value(device_info, "DeviceColor");
+	result["status"] = get_device_status(device_identifier);
+	result["product_type"] = get_device_property_value(device_identifier, "ProductType");
+	result["device_name"] = get_device_property_value(device_identifier, "DeviceName");
+	result["product_version"] = get_device_property_value(device_identifier, "ProductVersion");
+	result["device_color"] = get_device_property_value(device_identifier, "DeviceColor");
 }
 
 void device_notification_callback(const DevicePointer* device_ptr)
@@ -248,7 +256,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 		{
 			devices[device_identifier] = { device_ptr->device_info };
 			result[kEventString] = kDeviceFound;
-			get_device_properties(device_ptr->device_info, result);
+			get_device_properties(device_identifier, result);
 			break;
 		}
 		case kADNCIMessageDisconnected:
@@ -269,7 +277,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 		{
 			devices[device_identifier] = { device_ptr->device_info };
 			result[kEventString] = kDeviceTrusted;
-			get_device_properties(device_ptr->device_info, result);
+			get_device_properties(device_identifier, result);
 			break;
 		}
 	}
@@ -371,10 +379,10 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 	}
 
 	HANDLE socket = NULL;
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(devices[device_identifier].device_info), "Could not start device session", device_identifier, method_id, NULL);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(start_session(device_identifier), "Could not start device session", device_identifier, method_id, NULL);
 	CFStringRef cf_service_name = create_CFString(service_name);
 	unsigned result = AMDeviceStartService(devices[device_identifier].device_info, cf_service_name, &socket, NULL);
-	stop_session(devices[device_identifier].device_info);
+	stop_session(device_identifier);
 	CFRelease(cf_service_name);
 	if (result)
 	{
@@ -402,11 +410,11 @@ HANDLE start_house_arrest(const char* device_identifier, const char* application
 	}
 
 	HANDLE houseFd = NULL;
-	start_session(devices[device_identifier].device_info);
+	start_session(device_identifier);
 	CFStringRef cf_application_identifier = create_CFString(application_identifier);
 	unsigned result = AMDeviceStartHouseArrestService(devices[device_identifier].device_info, cf_application_identifier, 0, &houseFd, 0);
 	CFRelease(cf_application_identifier);
-	stop_session(devices[device_identifier].device_info);
+	stop_session(device_identifier);
 	
 	if (result)
 	{
@@ -486,7 +494,7 @@ void install_application(std::string install_path, const char* device_identifier
 	}
 	windows_path_to_unix(install_path);
 #endif
-	start_session(devices[device_identifier].device_info);
+	start_session(device_identifier);
 
 	CFStringRef path = create_CFString(install_path.c_str());
 	CFURLRef local_app_url =
@@ -497,7 +505,7 @@ void install_application(std::string install_path, const char* device_identifier
 #endif
 	CFRelease(path);
 	if (!local_app_url) {
-		stop_session(devices[device_identifier].device_info);
+		stop_session(device_identifier);
 		print_error("Could not parse application path", device_identifier, method_id, kAMDAPIInternalError);
 		return;
 	}
@@ -510,7 +518,7 @@ void install_application(std::string install_path, const char* device_identifier
 
 	unsigned transfer_result = AMDeviceSecureTransferPath(0, devices[device_identifier].device_info, local_app_url, options, NULL, 0);
 	if (transfer_result) {
-		stop_session(devices[device_identifier].device_info);
+		stop_session(device_identifier);
 		print_error("Could not transfer application", device_identifier, method_id, transfer_result);
 		return;
 	}
@@ -518,7 +526,7 @@ void install_application(std::string install_path, const char* device_identifier
 	unsigned install_result = AMDeviceSecureInstallApplication(0, devices[device_identifier].device_info, local_app_url, options, NULL, 0);
 	CFRelease(cf_package_type);
 	CFRelease(cf_developer);
-	stop_session(devices[device_identifier].device_info);
+	stop_session(device_identifier);
 
 	if (install_result)
 	{
