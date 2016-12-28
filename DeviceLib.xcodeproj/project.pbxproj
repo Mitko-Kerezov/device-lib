@@ -1213,8 +1213,8 @@
 					"$(inherited)",
 					"$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks",
 				);
-				HEADER_SEARCH_PATHS = "/Users/blackdragon/FFiSpike/DeviceLib/FfiSpike/PlistCpp/include/**";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/FfiSpike/PlistCpp/include/**";
+				PRODUCT_NAME = devicelib;
 				USER_HEADER_SEARCH_PATHS = "";
 			};
 			name = Debug;
@@ -1226,8 +1226,8 @@
 					"$(inherited)",
 					"$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks",
 				);
-				HEADER_SEARCH_PATHS = "/Users/blackdragon/FFiSpike/DeviceLib/FfiSpike/PlistCpp/include/**";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/FfiSpike/PlistCpp/include/**";
+				PRODUCT_NAME = devicelib;
 				USER_HEADER_SEARCH_PATHS = "";
 			};
 			name = Release;
