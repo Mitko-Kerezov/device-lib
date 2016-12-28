@@ -309,7 +309,8 @@
 		7038CB3A1DEEDB4C00A3D335 /* pugixml.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = pugixml.cpp; sourceTree = "<group>"; };
 		7038CB3B1DEEDB4C00A3D335 /* pugixml.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = pugixml.hpp; sourceTree = "<group>"; };
 		7038CB401DEEF31400A3D335 /* Declarations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Declarations.h; sourceTree = "<group>"; };
-		70F6ADAB1DEEB71300DD4722 /* DeviceLib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = DeviceLib; sourceTree = BUILT_PRODUCTS_DIR; };
+		70F5F4281E13EE02005196BF /* configuration.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = configuration.xcconfig; path = FfiSpike/configuration.xcconfig; sourceTree = "<group>"; };
+		70F6ADAB1DEEB71300DD4722 /* devicelib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = devicelib; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1046,6 +1047,7 @@
 		70F6ADA21DEEB71300DD4722 = {
 			isa = PBXGroup;
 			children = (
+				70F5F4281E13EE02005196BF /* configuration.xcconfig */,
 				7038C9EF1DEEDB4C00A3D335 /* FfiSpike */,
 				7038C89A1DEED6C300A3D335 /* MobileDevice.framework */,
 				7038C8981DEED5F500A3D335 /* CoreFoundation.framework */,
@@ -1056,7 +1058,7 @@
 		70F6ADAC1DEEB71300DD4722 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				70F6ADAB1DEEB71300DD4722 /* DeviceLib */,
+				70F6ADAB1DEEB71300DD4722 /* devicelib */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1078,7 +1080,7 @@
 			);
 			name = DeviceLib;
 			productName = DeviceLib;
-			productReference = 70F6ADAB1DEEB71300DD4722 /* DeviceLib */;
+			productReference = 70F6ADAB1DEEB71300DD4722 /* devicelib */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -1208,6 +1210,7 @@
 		};
 		70F6ADB31DEEB71300DD4722 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 70F5F4281E13EE02005196BF /* configuration.xcconfig */;
 			buildSettings = {
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1221,6 +1224,7 @@
 		};
 		70F6ADB41DEEB71300DD4722 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 70F5F4281E13EE02005196BF /* configuration.xcconfig */;
 			buildSettings = {
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
