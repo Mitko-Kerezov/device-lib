@@ -79,14 +79,14 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(SolutionPath)\FfiSpike\FfiSpike\PlistCpp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\FfiSpike\PlistCpp\include;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)bin\win32\$(PlatformTarget)</OutDir>
     <TargetName>devicelib</TargetName>
     <TargetExt>.exe</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\FFI_Spike\VS_FFiSpike\FfiSpike\FfiSpike\PlistCpp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\FfiSpike\PlistCpp\include;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)bin\win32\$(PlatformTarget)</OutDir>
     <TargetName>devicelib</TargetName>
     <TargetExt>.exe</TargetExt>
