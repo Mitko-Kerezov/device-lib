@@ -52,40 +52,39 @@ class DeviceLib extends EventEmitter {
 	}
 
 	install(ipaPath, deviceIdentifiers) {
-		return this._getPromise(MethodNames.install, [ipaPath, deviceIdentifiers], deviceIdentifiers.length);
+		return deviceIdentifiers.map(di => this._getPromise(MethodNames.install, [ipaPath, [di]]));
 	}
 
 	uninstall(appId, deviceIdentifiers) {
-		return this._getPromise(MethodNames.uninstall, [appId, deviceIdentifiers], deviceIdentifiers.length);
+		return deviceIdentifiers.map(di => this._getPromise(MethodNames.uninstall, [appId, [di]]));
 	}
 
 	list(listArray) {
-		return this._getPromise(MethodNames.list, listArray, listArray.length);
+		return listArray.map(listObject => this._getPromise(MethodNames.list, [listObject]));
 	}
 
-	upload(listArray) {
-		return this._getPromise(MethodNames.upload, listArray, listArray.length);
+	upload(uploadArray) {
+		return uploadArray.map(uploadObject => this._getPromise(MethodNames.upload, [uploadObject]));
 	}
 
-	delete(listArray) {
-		return this._getPromise(MethodNames.delete, listArray, listArray.length);
+	delete(deleteArray) {
+		return deleteArray.map(deleteObject => this._getPromise(MethodNames.delete, [deleteObject]));
 	}
 
-	notify(listArray) {
-		return this._getPromise(MethodNames.notify, listArray, listArray.length);
+	notify(notifyArray) {
+		return notifyArray.map(notificationObject => this._getPromise(MethodNames.notify, [notificationObject]));
 	}
 
 	apps(deviceIdentifiers) {
-		return this._getPromise(MethodNames.apps, deviceIdentifiers, deviceIdentifiers.length);
+		return deviceIdentifiers.map(di => this._getPromise(MethodNames.apps, [di]));
 	}
 
 	startDeviceLog(deviceIdentifiers) {
-		return this._getPromise(MethodNames.log, deviceIdentifiers);
+		this._getPromise(MethodNames.log, deviceIdentifiers, { shouldEmit: true });
 	}
 
-	_getPromise(methodName, args, numberOrMessages) {
+	_getPromise(methodName, args, options) {
 		return new Promise((resolve, reject) => {
-			let responses = [];
 			if (!args || !args.length) {
 				return reject(new Error("No arguments provided"));
 			}
@@ -95,14 +94,11 @@ class DeviceLib extends EventEmitter {
 				let response = this._read(data, id);
 				if (response) {
 					delete response.id;
-					if (numberOrMessages) {
-						responses.push(response);
-						if (responses.length === numberOrMessages) {
-							resolve(responses);
-							this._chProc.stdout.removeListener("data", eventHandler);
-						}
-					} else {
+					if (options && options.shouldEmit) {
 						this.emit(Events.deviceLogData, response);
+					} else {
+						response.error ? reject(response) : resolve(response);
+						this._chProc.stdout.removeListener("data", eventHandler);
 					}
 				}
 			};
