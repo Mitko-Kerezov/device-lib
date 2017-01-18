@@ -66,10 +66,20 @@ struct afc_directory {
     unsigned char unknown[0];   /* size unknown */
 };
 
+struct afc_file {
+	afc_file_ref file_ref;
+	afc_connection* afc_conn_p;
+};
+
 struct DeviceData {
     DeviceInfo* device_info;
     std::map<const char*, HANDLE> services;
 	int sessions;
+	afc_connection* afc_conn_p;
+
+	//~DeviceData() {
+	//	//device_info
+	//}
 };
 
 #pragma endregion Data_Structures_Definition
@@ -106,7 +116,8 @@ typedef unsigned(__cdecl *afc_directory_close)(afc_connection*, afc_directory*);
 typedef unsigned(__cdecl *afc_directory_create)(afc_connection*, const char *);
 typedef unsigned(__cdecl *afc_remove_path)(afc_connection*, const char *);
 typedef unsigned(__cdecl *afc_fileref_open)(afc_connection*, const char *, unsigned long long, afc_file_ref*);
-typedef unsigned(__cdecl *afc_fileref_read)(afc_connection*, afc_file_ref*, void *, unsigned);
+typedef unsigned(__cdecl *afc_fileref_read)(afc_connection*, afc_file_ref, void *, size_t*);
+typedef unsigned(__cdecl *afc_get_device_info_key)(afc_connection*, const char *, char**);
 typedef unsigned(__cdecl *afc_fileref_write)(afc_connection*, afc_file_ref, const void*, size_t);
 typedef unsigned(__cdecl *afc_fileref_close)(afc_connection*, afc_file_ref);
 typedef unsigned(__cdecl *device_start_house_arrest)(const DeviceInfo*, CFStringRef, void*, HANDLE*, unsigned int*);
@@ -153,6 +164,7 @@ afc_directory_create __AFCDirectoryCreate;
 afc_remove_path __AFCRemovePath;
 afc_fileref_open __AFCFileRefOpen;
 afc_fileref_read __AFCFileRefRead;
+afc_get_device_info_key __AFCGetDeviceInfoKey;
 afc_fileref_write __AFCFileRefWrite;
 afc_fileref_close __AFCFileRefClose;
 #endif // _WIN32
@@ -195,6 +207,7 @@ afc_fileref_close __AFCFileRefClose;
 #define AFCDirectoryCreate GET_IF_EXISTS(__AFCDirectoryCreate, afc_directory_create, mobile_device_dll, "AFCDirectoryCreate")
 #define AFCFileRefOpen GET_IF_EXISTS(__AFCFileRefOpen, afc_fileref_open, mobile_device_dll, "AFCFileRefOpen")
 #define AFCFileRefRead GET_IF_EXISTS(__AFCFileRefRead, afc_fileref_read, mobile_device_dll, "AFCFileRefRead")
+#define AFCGetDeviceInfoKey GET_IF_EXISTS(__AFCGetDeviceInfoKey, afc_get_device_info_key, mobile_device_dll, "AFCGetDeviceInfoKey")
 #define AFCFileRefWrite GET_IF_EXISTS(__AFCFileRefWrite, afc_fileref_write, mobile_device_dll, "AFCFileRefWrite")
 #define AFCFileRefClose GET_IF_EXISTS(__AFCFileRefClose, afc_fileref_close, mobile_device_dll, "AFCFileRefClose")
 #endif // _WIN32
@@ -232,7 +245,7 @@ extern "C"
     unsigned AFCDirectoryClose(afc_connection*, afc_directory*);
     unsigned AFCDirectoryCreate(afc_connection*, const char*);
     unsigned AFCFileRefOpen(afc_connection*, const char*, unsigned long long, afc_file_ref*);
-    unsigned AFCFileRefRead(afc_connection*, afc_file_ref*, void*, unsigned);
+    unsigned AFCFileRefRead(afc_connection*, afc_file_ref*, void*, size_t*);
     unsigned AFCFileRefWrite(afc_connection*, afc_file_ref, const void*, size_t);
     unsigned AFCFileRefClose(afc_connection*, afc_file_ref);
 

@@ -2,6 +2,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <memory>
 #include <thread>
 #include <sys/stat.h>
 #ifdef _WIN32
@@ -30,6 +31,7 @@ const unsigned kADNCIMessageDisconnected = 2;
 const unsigned kADNCIMessageUnknown = 3;
 const unsigned kADNCIMessageTrusted = 4;
 const unsigned kDeviceLogBytesToRead = 1 << 10;
+const unsigned kDeviceFileBytesToRead = 200;
 #ifdef _WIN32
 const unsigned kCFStringEncodingUTF8 = 0x08000100;
 #endif
@@ -125,7 +127,8 @@ void split(const std::string &s, char delim, std::vector<std::string> &elems) {
 	std::stringstream ss;
 	ss.str(s);
 	std::string item;
-	while (std::getline(ss, item, delim)) {
+	while (std::getline(ss, item, delim))
+	{
 		elems.push_back(item);
 	}
 }
@@ -140,7 +143,8 @@ void replace_all(std::string& str, const std::string& from, const std::string& t
 	if (from.empty())
 		return;
 	size_t start_pos = 0;
-	while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+	while ((start_pos = str.find(from, start_pos)) != std::string::npos)
+	{
 		str.replace(start_pos, from.length(), to);
 		start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
 	}
@@ -180,7 +184,8 @@ CFStringRef create_CFString(const char* str)
 
 int start_session(const char* device_identifier)
 {
-	if (devices[device_identifier].sessions < 1) {
+	if (devices[device_identifier].sessions < 1)
+	{
 		const DeviceInfo* device_info = devices[device_identifier].device_info;
 		RETURN_IF_FAILED_RESULT(AMDeviceConnect(device_info));
 		if (!AMDeviceIsPaired(device_info))
@@ -198,7 +203,8 @@ int start_session(const char* device_identifier)
 
 void stop_session(const char* device_identifier)
 {
-	if (--devices[device_identifier].sessions < 1) {
+	if (--devices[device_identifier].sessions < 1)
+	{
 		const DeviceInfo *device_info = devices[device_identifier].device_info;
 		AMDeviceStopSession(device_info);
 		AMDeviceDisconnect(device_info);
@@ -432,7 +438,7 @@ afc_connection *get_afc_connection(const char* device_identifier, const char* ap
 {
 	if (devices.count(device_identifier) && devices[device_identifier].services.count(kAppleFileConnection))
 	{
-		return (afc_connection *)devices[device_identifier].services[kAppleFileConnection];
+		return devices[device_identifier].afc_conn_p;
 	}
 
 	HANDLE houseFd = start_house_arrest(device_identifier, application_identifier, method_id);
@@ -441,10 +447,9 @@ afc_connection *get_afc_connection(const char* device_identifier, const char* ap
 		return NULL;
 	}
 
-	afc_connection afc_conn;
-	afc_connection* afc_conn_p = &afc_conn;
+	afc_connection* afc_conn_p = NULL;
 	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCConnectionOpen(houseFd, 0, &afc_conn_p), "Could not open afc connection", device_identifier, method_id, NULL);
-	devices[device_identifier].services[kAppleFileConnection] = afc_conn_p;
+	devices[device_identifier].afc_conn_p = afc_conn_p;
 	return afc_conn_p;
 }
 
@@ -504,7 +509,8 @@ void install_application(std::string install_path, const char* device_identifier
 		CFURLCreateWithFileSystemPath(NULL, path, kCFURLPOSIXPathStyle, true);
 #endif
 	CFRelease(path);
-	if (!local_app_url) {
+	if (!local_app_url)
+	{
 		stop_session(device_identifier);
 		print_error("Could not parse application path", device_identifier, method_id, kAMDAPIInternalError);
 		return;
@@ -517,7 +523,8 @@ void install_application(std::string install_path, const char* device_identifier
 	CFDictionaryRef options = CFDictionaryCreate(NULL, keys_arr, values_arr, 1, NULL, NULL);
 
 	unsigned transfer_result = AMDeviceSecureTransferPath(0, devices[device_identifier].device_info, local_app_url, options, NULL, 0);
-	if (transfer_result) {
+	if (transfer_result)
+	{
 		stop_session(device_identifier);
 		print_error("Could not transfer application", device_identifier, method_id, transfer_result);
 		return;
@@ -576,7 +583,8 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 		return;
 	}
 
-	while (true) {
+	while (true)
+	{
 		err = AFCDirectoryRead(afc_conn_p, afc_dir_p, &dir_ent);
 
 		if (!dir_ent)
@@ -721,25 +729,65 @@ void delete_file(const char *device_identifier, const char *application_identifi
 	print(json({{ "response", "Successfully removed file" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
-void read_file(const char *device_identifier, const char *application_identifier, const char *destination, std::string method_id) {
+std::unique_ptr<afc_file> get_afc_file(const char *device_identifier, const char *application_identifier, const char *destination, std::string method_id){
 	afc_file_ref file_ref;
 	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
 	if (!afc_conn_p)
 	{
-		return;
+		return NULL;
 	}
 
 	std::string destination_str = windows_path_to_unix(destination);
 	destination = destination_str.c_str();
 	std::stringstream error_message;
-	AFCRemovePath(afc_conn_p, destination);
-	error_message << "Could not open file " << destination << " for writing";
-	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeRead, &file_ref), error_message.str().c_str(), device_identifier, method_id);
-	unsigned size_to_read = 1 << 3;
-	void *buf = malloc(sizeof(size_t) * size_to_read);
-	AFCFileRefRead(afc_conn_p, &file_ref, buf, size_to_read);
+	error_message << "Could not open file " << destination << " for reading";
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeRead, &file_ref), error_message.str().c_str(), device_identifier, method_id, NULL);
+	std::unique_ptr<afc_file> result(new afc_file{ file_ref, afc_conn_p });
+	return result;
+}
 
-	print(json({{ "response", "Successfully uploaded file" },{ kId, method_id },{ kDeviceId, device_identifier } }));
+void read_file(const char *device_identifier, const char *application_identifier, const char *path, std::string method_id, const char *destination = NULL) {
+	std::unique_ptr<afc_file> file = get_afc_file(device_identifier, application_identifier, path, method_id);
+	if (!file)
+	{
+		return;
+	}
+
+	size_t read_size = kDeviceFileBytesToRead;
+	std::string result;
+	char *buf;
+	if (destination)
+	{
+		// Write the contents of the source file to the destination
+		std::ofstream ostream;
+		ostream.open(destination);
+		do
+		{
+			buf = new char[kDeviceFileBytesToRead];
+			AFCFileRefRead(file->afc_conn_p, file->file_ref, buf, &read_size);
+			ostream.write(buf, read_size);
+			free(buf);
+		} while (read_size == kDeviceFileBytesToRead);
+
+		ostream.close();
+		result = std::string("File written successfully!");
+	}
+	else 
+	{
+		// Pipe the contents of the file to the stdout
+		std::vector<char> file_contents;
+		do
+		{
+			buf = new char[kDeviceFileBytesToRead];
+			AFCFileRefRead(file->afc_conn_p, file->file_ref, buf, &read_size);
+			file_contents.insert(file_contents.end(), buf, buf + read_size);
+			free(buf);
+		} while (read_size == kDeviceFileBytesToRead);
+
+		result = std::string(file_contents.begin(), file_contents.end());
+	}
+
+	print(json({{ "response", result },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 void get_application_infos(const char *device_identifier, std::string method_id)
@@ -879,15 +927,16 @@ int main()
 			std::string method_name = method.value("name", "");
 			std::string method_id = method.value("id", "");
 			std::vector<json> method_args = method.value("args", json::array()).get<std::vector<json>>();
+
 			if (method_name == "install")
 			{
 				perform_detached_operation(install_application, method_args, method_id);
 			}
-			if (method_name == "uninstall")
+			else if (method_name == "uninstall")
 			{
 				perform_detached_operation(uninstall_application, method_args, method_id);
 			}
-			if (method_name == "list")
+			else if (method_name == "list")
 			{
 				for (json arg : method_args)
 				{
@@ -897,7 +946,7 @@ int main()
 					list_files(device_identifier.c_str(), application_identifier.c_str(), path.c_str(), method_id);
 				}
 			}
-			if (method_name == "upload")
+			else if (method_name == "upload")
 			{
 				for (json arg : method_args)
 				{
@@ -908,7 +957,7 @@ int main()
 					upload_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), destination.c_str(), method_id);
 				}
 			}
-			if (method_name == "delete")
+			else if (method_name == "delete")
 			{
 				for (json arg : method_args)
 				{
@@ -918,31 +967,42 @@ int main()
 					delete_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str(), method_id);
 				}
 			}
-			///*if (method_name == "read")
-			//{
-			//	for (json arg : method_args)
-			//	{
-			//		std::string application_identifier = arg.value("appId", "");
-			//		std::string device_identifier = arg.value(kDeviceId, "");
-			//		std::string destination = arg.value("destination", "");
-			//		read_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str());
-			//	}
-			//}*/
-			if (method_name == "apps")
+			else if (method_name == "read")
+			{
+				for (json arg : method_args)
+				{
+					std::string application_identifier = arg.value("appId", "");
+					std::string device_identifier = arg.value(kDeviceId, "");
+					std::string path = arg.value("path", "");
+					read_file(device_identifier.c_str(), application_identifier.c_str(), path.c_str(), method_id);
+				}
+			}
+			else if (method_name == "download")
+			{
+				for (json arg : method_args)
+				{
+					std::string application_identifier = arg.value("appId", "");
+					std::string device_identifier = arg.value(kDeviceId, "");
+					std::string source = arg.value("source", "");
+					std::string destination = arg.value("destination", "");
+					read_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), method_id, destination.c_str());
+				}
+			}
+			else if (method_name == "apps")
 			{
 				for (json device_identifier_json : method_args) {
 					std::string device_identifier = device_identifier_json.get<std::string>();
 					perform_detached_operation(get_application_infos, device_identifier, method_id);
 				}
 			}
-			if (method_name == "log")
+			else if (method_name == "log")
 			{
 				for (json device_identifier_json : method_args) {
 					std::string device_identifier = device_identifier_json.get<std::string>();
 					perform_detached_operation(device_log, device_identifier, method_id);
 				}
 			}
-			if (method_name == "notify")
+			else if (method_name == "notify")
 			{
 				for (json arg : method_args)
 				{
@@ -951,7 +1011,7 @@ int main()
 					post_notification(device_identifier.c_str(), notification_name.c_str(), method_id);
 				}
 			}
-			if (method_name == "exit")
+			else if (method_name == "exit")
 			{
 				return 0;
 			}
