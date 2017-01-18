@@ -269,6 +269,10 @@ void device_notification_callback(const DevicePointer* device_ptr)
 		{
 			if (devices.count(device_identifier))
 			{
+				if (devices[device_identifier].afc_conn_p)
+				{
+					AFCConnectionClose(devices[device_identifier].afc_conn_p);
+				}
 				devices.erase(device_identifier);
 			}
 			result[kEventString] = kDeviceLost;
@@ -787,6 +791,7 @@ void read_file(const char *device_identifier, const char *application_identifier
 		result = std::string(file_contents.begin(), file_contents.end());
 	}
 
+	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(file->afc_conn_p, file->file_ref), "Could not close file reference", device_identifier, method_id);
 	print(json({{ "response", result },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
