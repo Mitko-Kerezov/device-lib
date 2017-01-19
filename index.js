@@ -93,6 +93,11 @@ class DeviceLib extends EventEmitter {
 		this._getPromise(MethodNames.log, deviceIdentifiers, { shouldEmit: true });
 	}
 
+	dispose() {
+		this._chProc.removeAllListeners();
+		this._chProc.kill();
+	}
+
 	_getPromise(methodName, args, options) {
 		return new Promise((resolve, reject) => {
 			if (!args || !args.length) {
