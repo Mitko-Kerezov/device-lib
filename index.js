@@ -21,6 +21,8 @@ const MethodNames = {
 	list: "list",
 	log: "log",
 	upload: "upload",
+	download: "download",
+	read: "read",
 	delete: "delete",
 	notify: "notify",
 	apps: "apps",
@@ -65,6 +67,14 @@ class DeviceLib extends EventEmitter {
 
 	upload(uploadArray) {
 		return uploadArray.map(uploadObject => this._getPromise(MethodNames.upload, [uploadObject]));
+	}
+
+	download(downloadArray) {
+		return downloadArray.map(downloadObject => this._getPromise(MethodNames.download, [downloadObject]));
+	}
+
+	read(readArray) {
+		return readArray.map(readObject => this._getPromise(MethodNames.read, [readObject]));
 	}
 
 	delete(deleteArray) {
