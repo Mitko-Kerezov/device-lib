@@ -245,10 +245,10 @@ const char *get_device_status(const char* device_identifier)
 void get_device_properties(const char* device_identifier, json &result)
 {
 	result["status"] = get_device_status(device_identifier);
-	result["product_type"] = get_device_property_value(device_identifier, "ProductType");
-	result["device_name"] = get_device_property_value(device_identifier, "DeviceName");
-	result["product_version"] = get_device_property_value(device_identifier, "ProductVersion");
-	result["device_color"] = get_device_property_value(device_identifier, "DeviceColor");
+	result["productType"] = get_device_property_value(device_identifier, "ProductType");
+	result["deviceName"] = get_device_property_value(device_identifier, "DeviceName");
+	result["productVersion"] = get_device_property_value(device_identifier, "ProductVersion");
+	result["deviceColor"] = get_device_property_value(device_identifier, "DeviceColor");
 }
 
 void device_notification_callback(const DevicePointer* device_ptr)
