@@ -58,6 +58,7 @@ const char *kId = "id";
 const char *kNullMessageId = "null";
 const char *kDeviceId = "deviceId";
 const char *kError = "error";
+const char *kResponse = "response";
 const char *kMessage = "message";
 const char *kCode = "code";
 const int kAFCFileModeRead = 2;
@@ -481,7 +482,7 @@ void uninstall_application(std::string application_identifier, const char* devic
 	}
 	else
 	{
-		print(json({{ "response", "Successfully uninstalled application" }, { kId, method_id }, { kDeviceId, device_identifier }}));
+		print(json({{ kResponse, "Successfully uninstalled application" }, { kId, method_id }, { kDeviceId, device_identifier }}));
 		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
 		devices[device_identifier].services.erase(kAppleFileConnection);
 		devices[device_identifier].services.erase(kHouseArrest);
@@ -545,7 +546,7 @@ void install_application(std::string install_path, const char* device_identifier
 		return;
 	}
 
-	print(json({ { "response", "Successfully installed application" }, { kId, method_id }, {kDeviceId, device_identifier}}));
+	print(json({ { kResponse, "Successfully installed application" }, { kId, method_id }, {kDeviceId, device_identifier}}));
 }
 
 void perform_detached_operation(void(*operation)(const char*, std::string), std::string arg, std::string method_id)
@@ -633,7 +634,7 @@ void list_files(const char *device_identifier, const char *application_identifie
 	
 	std::string device_path_str = windows_path_to_unix(device_path);
 	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, method_id, device_identifier);
-	print(json({{ "response", files }, { kId, method_id }, { kDeviceId, device_identifier }}));
+	print(json({{ kResponse, files }, { kId, method_id }, { kDeviceId, device_identifier }}));
 }
 
 void* read_file_to_memory(char * path, size_t* file_size)
@@ -705,7 +706,7 @@ void upload_file(const char *device_identifier, const char *application_identifi
 			error_message << "Could not close file reference: " << destination;
 			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(afc_conn_p, file_ref), error_message.str().c_str(), device_identifier, method_id);
 			error_message.str(std::string());
-			print(json({{ "response", "Successfully uploaded file" },{ kId, method_id },{ kDeviceId, device_identifier }}));
+			print(json({{ kResponse, "Successfully uploaded file" },{ kId, method_id },{ kDeviceId, device_identifier }}));
 		}
 	}
 	else 
@@ -730,7 +731,7 @@ void delete_file(const char *device_identifier, const char *application_identifi
 	std::stringstream error_message;
 	error_message << "Could not remove file " << destination;
 	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCRemovePath(afc_conn_p, destination), error_message.str().c_str(), device_identifier, method_id);
-	print(json({{ "response", "Successfully removed file" },{ kId, method_id },{ kDeviceId, device_identifier } }));
+	print(json({{ kResponse, "Successfully removed file" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 std::unique_ptr<afc_file> get_afc_file(const char *device_identifier, const char *application_identifier, const char *destination, std::string method_id){
@@ -792,7 +793,7 @@ void read_file(const char *device_identifier, const char *application_identifier
 	}
 
 	PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(file->afc_conn_p, file->file_ref), "Could not close file reference", device_identifier, method_id);
-	print(json({{ "response", result },{ kId, method_id },{ kDeviceId, device_identifier } }));
+	print(json({{ kResponse, result },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 void get_application_infos(const char *device_identifier, std::string method_id)
@@ -856,7 +857,7 @@ void get_application_infos(const char *device_identifier, std::string method_id)
 		}
 	}
 
-	print(json({ { "apps", livesync_app_infos }, { kId, method_id },{ kDeviceId, device_identifier } }));
+	print(json({ { kResponse, livesync_app_infos }, { kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 void device_log(const char* device_identifier, std::string method_id)
@@ -911,7 +912,7 @@ void post_notification(const char* device_identifier, std::string notification_n
 	
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command.str().c_str());
 	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
-	print(json({ { "response", "Successfully sent notification" },{ kId, method_id },{ kDeviceId, device_identifier } }));
+	print(json({ { kResponse, "Successfully sent notification" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
 int main()

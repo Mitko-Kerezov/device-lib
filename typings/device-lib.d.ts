@@ -1,12 +1,12 @@
 declare module IOSDeviceLib {
 	interface IDeviceActionInfo {
 		deviceId: string;
-		deviceColor: string;
-		deviceName: string;
 		event: string;
-		productType: string;
-		productVersion: string;
-		status: string;
+		deviceColor?: string;
+		deviceName?: string;
+		productType?: string;
+		productVersion?: string;
+		status?: string;
 	}
 
 	interface IDeviceId {
@@ -42,16 +42,44 @@ declare module IOSDeviceLib {
 		notificationName: string;
 	}
 
+	interface IErrorDTO {
+		code: number;
+		message: string;
+	}
+
+	interface IDeviceError extends IDeviceId {
+		error: IErrorDTO;
+	}
+
+	interface IDeviceResponse extends IDeviceId {
+		response: string;
+	}
+
+	interface IDeviceMultipleResponse extends IDeviceId {
+		response: string[];
+	}
+
+	interface IApplicationInfo {
+		CFBundleIdentifier: string;
+		IceniumLiveSyncEnabled: boolean;
+		configuration: string;
+	}
+
+	interface IDeviceAppInfo extends IDeviceId {
+		response: IApplicationInfo[];
+	}
+
 	interface IOSDeviceLib {
-		install(ipaPath: string, deviceIdentifiers: string[]): Promise<any[]>;
-		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<any[]>;
-		list(listArray: IReadOperationData[]): Promise<any[]>;
-		upload(uploadArray: IFileOperationData[]): Promise<any[]>;
-		download(downloadArray: IFileOperationData[]): Promise<any[]>;
-		read(readArray: IReadOperationData[]): Promise<any[]>;
-		delete(deleteArray: IDeleteFileData[]): Promise<any[]>;
-		notify(notifyArray: INotifyData): Promise<any[]>;
-		apps(deviceIdentifiers: string[]): Promise<any[]>;
+		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void);
+		install(ipaPath: string, deviceIdentifiers: string[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
+		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
+		list(listArray: IReadOperationData[]): Promise<Array<IDeviceMultipleResponse | IErrorDTO>>;
+		upload(uploadArray: IFileOperationData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
+		download(downloadArray: IFileOperationData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
+		read(readArray: IReadOperationData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
+		delete(deleteArray: IDeleteFileData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
+		notify(notifyArray: INotifyData): Promise<Array<IDeviceResponse | IErrorDTO>>;
+		apps(deviceIdentifiers: string[]): Promise<Array<IDeviceAppInfo | IErrorDTO>>;
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
 	}
