@@ -75,7 +75,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\FFI_Spike\VS_FFiSpike\FfiSpike\FfiSpike\PlistCpp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)\FfiSpike\PlistCpp\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
