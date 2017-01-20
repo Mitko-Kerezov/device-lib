@@ -245,7 +245,7 @@ extern "C"
     unsigned AFCDirectoryClose(afc_connection*, afc_directory*);
     unsigned AFCDirectoryCreate(afc_connection*, const char*);
     unsigned AFCFileRefOpen(afc_connection*, const char*, unsigned long long, afc_file_ref*);
-    unsigned AFCFileRefRead(afc_connection*, afc_file_ref*, void*, size_t*);
+    unsigned AFCFileRefRead(afc_connection*, afc_file_ref, void*, size_t*);
     unsigned AFCFileRefWrite(afc_connection*, afc_file_ref, const void*, size_t);
     unsigned AFCFileRefClose(afc_connection*, afc_file_ref);
 
