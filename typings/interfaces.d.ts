@@ -42,15 +42,6 @@ declare module IOSDeviceLib {
 		notificationName: string;
 	}
 
-	interface IErrorDTO {
-		code: number;
-		message: string;
-	}
-
-	interface IDeviceError extends IDeviceId {
-		error: IErrorDTO;
-	}
-
 	interface IDeviceResponse extends IDeviceId {
 		response: string;
 	}
@@ -75,17 +66,18 @@ declare module IOSDeviceLib {
 
 	interface IOSDeviceLib extends NodeJS.EventEmitter {
 		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void): IOSDeviceLib;
-		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse | IErrorDTO>[];
-		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse | IErrorDTO>[];
-		list(listArray: IReadOperationData[]): Promise<IDeviceMultipleResponse | IErrorDTO>[];
-		upload(uploadArray: IFileOperationData[]): Promise<IDeviceResponse | IErrorDTO>[];
-		download(downloadArray: IFileOperationData[]): Promise<IDeviceResponse | IErrorDTO>[];
-		read(readArray: IReadOperationData[]): Promise<IDeviceResponse | IErrorDTO>[];
-		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse | IErrorDTO>[];
-		notify(notifyArray: INotifyData): Promise<IDeviceResponse | IErrorDTO>[];
-		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo | IErrorDTO>[];
+		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
+		install(ipaPath: string, deviceIdentifiers: string[]): Promise<INodeJSWrapper<IDeviceResponse>>[];
+		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
+		list(listArray: IReadOperationData[]): Promise<IDeviceMultipleResponse>[];
+		upload(uploadArray: IFileOperationData[]): Promise<IDeviceResponse>[];
+		download(downloadArray: IFileOperationData[]): Promise<IDeviceResponse>[];
+		read(readArray: IReadOperationData[]): Promise<IDeviceResponse>[];
+		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse>[];
+		notify(notifyArray: INotifyData): Promise<IDeviceResponse>[];
+		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
-		on(event: "deviceLogData", listener: (response: IDeviceLogData | IErrorDTO) => void): NodeJS.EventEmitter;
+		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): NodeJS.EventEmitter;
 	}
 }

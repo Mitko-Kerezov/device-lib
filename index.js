@@ -112,7 +112,7 @@ class IOSDeviceLib extends EventEmitter {
 					if (options && options.shouldEmit) {
 						this.emit(Events.deviceLogData, response);
 					} else {
-						response.error ? reject(response) : resolve(response);
+						response.error ? reject(response.error) : resolve(response);
 						this._chProc.stdout.removeListener("data", eventHandler);
 					}
 				}
