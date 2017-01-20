@@ -69,18 +69,23 @@ declare module IOSDeviceLib {
 		response: IApplicationInfo[];
 	}
 
+	interface IDeviceLogData extends IDeviceId {
+		message: string;
+	}
+
 	interface IOSDeviceLib {
 		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void);
-		install(ipaPath: string, deviceIdentifiers: string[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
-		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
-		list(listArray: IReadOperationData[]): Promise<Array<IDeviceMultipleResponse | IErrorDTO>>;
-		upload(uploadArray: IFileOperationData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
-		download(downloadArray: IFileOperationData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
-		read(readArray: IReadOperationData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
-		delete(deleteArray: IDeleteFileData[]): Promise<Array<IDeviceResponse | IErrorDTO>>;
-		notify(notifyArray: INotifyData): Promise<Array<IDeviceResponse | IErrorDTO>>;
-		apps(deviceIdentifiers: string[]): Promise<Array<IDeviceAppInfo | IErrorDTO>>;
+		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse | IErrorDTO>[];
+		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse | IErrorDTO>[];
+		list(listArray: IReadOperationData[]): Promise<IDeviceMultipleResponse | IErrorDTO>[];
+		upload(uploadArray: IFileOperationData[]): Promise<IDeviceResponse | IErrorDTO>[];
+		download(downloadArray: IFileOperationData[]): Promise<IDeviceResponse | IErrorDTO>[];
+		read(readArray: IReadOperationData[]): Promise<IDeviceResponse | IErrorDTO>[];
+		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse | IErrorDTO>[];
+		notify(notifyArray: INotifyData): Promise<IDeviceResponse | IErrorDTO>[];
+		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo | IErrorDTO>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
+		on(event: "deviceLogData", listener: (response: IDeviceLogData | IErrorDTO) => void): NodeJS.EventEmitter;
 	}
 }
