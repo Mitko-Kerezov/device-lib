@@ -73,8 +73,8 @@ declare module IOSDeviceLib {
 		message: string;
 	}
 
-	interface IOSDeviceLib {
-		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void);
+	interface IOSDeviceLib extends NodeJS.EventEmitter {
+		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void): IOSDeviceLib;
 		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse | IErrorDTO>[];
 		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse | IErrorDTO>[];
 		list(listArray: IReadOperationData[]): Promise<IDeviceMultipleResponse | IErrorDTO>[];
