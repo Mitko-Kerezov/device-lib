@@ -32,7 +32,7 @@ const Events = {
 	deviceLogData: "deviceLogData"
 };
 
-class DeviceLib extends EventEmitter {
+class IOSDeviceLib extends EventEmitter {
 	constructor(onDeviceFound, onDeviceLost) {
 		super();
 		this._chProc = spawn(path.join(__dirname, "bin", os.platform(), os.arch(), "devicelib"));
@@ -150,4 +150,4 @@ class DeviceLib extends EventEmitter {
 	}
 }
 
-module.exports = DeviceLib;
+exports.IOSDeviceLib = IOSDeviceLib;
