@@ -67,7 +67,6 @@ declare module IOSDeviceLib {
 	interface IOSDeviceLib extends NodeJS.EventEmitter {
 		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void): IOSDeviceLib;
 		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
-		install(ipaPath: string, deviceIdentifiers: string[]): Promise<INodeJSWrapper<IDeviceResponse>>[];
 		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
 		list(listArray: IReadOperationData[]): Promise<IDeviceMultipleResponse>[];
 		upload(uploadArray: IFileOperationData[]): Promise<IDeviceResponse>[];
