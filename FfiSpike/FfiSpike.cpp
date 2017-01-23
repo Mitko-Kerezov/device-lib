@@ -27,6 +27,7 @@
 
 #pragma region Constants
 const unsigned kArgumentError = 3;
+const unsigned kAFCCustomError = 4;
 
 const unsigned kADNCIMessageConnected = 1;
 const unsigned kADNCIMessageDisconnected = 2;
@@ -580,7 +581,7 @@ void perform_detached_operation(void(*operation)(std::string, std::string, std::
 		std::thread([operation, first_arg, device_identifier, method_id]() { operation(first_arg, device_identifier, method_id);  }).detach();
 }
 
-void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::string method_id, std::string device_identifier)
+void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::stringstream &errors, std::string method_id, std::string device_identifier)
 {
 	char *dir_ent;
 	files.push_back(dir);
@@ -590,9 +591,10 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 	unsigned afc_file_info_open_result = AFCFileInfoOpen(afc_conn_p, dir, &afc_dict_p);
 	if (afc_file_info_open_result)
 	{
-		std::string message("Could not open file info for file: ");
-		message += dir;
-		print_error(message.c_str(), device_identifier, method_id, afc_file_info_open_result);
+		errors << "Could not open file info for file: ";
+		errors << dir;
+		errors << '\n';
+
 		return;
 	}
 
@@ -621,14 +623,16 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 		if (dir_joined[strlen(dir) - 1] != '/')
 			strcat(dir_joined, "/");
 		strcat(dir_joined, dir_ent);
-		read_dir(afcFd, afc_conn_p, dir_joined, files, method_id, device_identifier);
+		read_dir(afcFd, afc_conn_p, dir_joined, files, errors, method_id, device_identifier);
 		free(dir_joined);
 	}
 
 	unsigned afc_directory_close_result = AFCDirectoryClose(afc_conn_p, afc_dir_p);
 	if (afc_directory_close_result)
 	{
-		print_error("Could not close directory", device_identifier, method_id, afc_directory_close_result);
+		errors << "Could not close directory: ";
+		errors << dir_ent;
+		errors << '\n';
 	}
 }
 
@@ -649,10 +653,18 @@ void list_files(const char *device_identifier, const char *application_identifie
 		return;
 	}
 	json files;
+	std::stringstream errors;
 	
 	std::string device_path_str = windows_path_to_unix(device_path);
-	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, method_id, device_identifier);
-	print(json({{ kResponse, files }, { kId, method_id }, { kDeviceId, device_identifier }}));
+	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, errors, method_id, device_identifier);
+	if (!files.empty())
+	{
+		print(json({{ kResponse, files }, { kId, method_id }, { kDeviceId, device_identifier }}));
+	}
+	if (errors.rdbuf()->in_avail() != 0)
+	{
+		print_error(errors.str().c_str(), device_identifier, method_id, kAFCCustomError);
+	}
 }
 
 bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id, const char * device_identifier)
