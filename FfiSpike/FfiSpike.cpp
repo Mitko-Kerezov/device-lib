@@ -80,16 +80,8 @@ const std::string file_prefix("file:///");
 
 using json = nlohmann::json;
 
-struct cmp_str
-{
-	bool operator()(char const *a, char const *b) const
-	{
-		return std::strcmp(a, b) < 0;
-	}
-};
-
 int __result;
-std::map<const char*, DeviceData, cmp_str> devices;
+std::map<std::string, DeviceData> devices;
 
 LengthEncodedMessage get_message_with_encoded_length(const char* message)
 {
@@ -97,7 +89,7 @@ LengthEncodedMessage get_message_with_encoded_length(const char* message)
 	unsigned long message_len = original_message_len + 4;
 	char *length_encoded_message = new char[message_len];
 	unsigned long packed_length = htonl(original_message_len);
-    size_t packed_length_size = 4;// ssizeof(packed_length);
+    size_t packed_length_size = 4;
 	memcpy(length_encoded_message, &packed_length, packed_length_size);
 	memcpy(length_encoded_message + packed_length_size, message, original_message_len);
 	return{ length_encoded_message, message_len };
@@ -163,19 +155,19 @@ std::string windows_path_to_unix(const char *path)
 	return path_str;
 }
 
-const char* get_cstring_from_cfstring(CFStringRef cfstring)
+std::string get_cstring_from_cfstring(CFStringRef cfstring)
 {
-	const char* device_identifier = CFStringGetCStringPtr(cfstring, kCFStringEncodingUTF8);
-	char* device_identifier_buffer = new char[200];
+	const char * device_identifier = CFStringGetCStringPtr(cfstring, kCFStringEncodingUTF8);
+	char device_identifier_buffer[200];
 	if (device_identifier == NULL)
 	{
 		if (CFStringGetCString(cfstring, device_identifier_buffer, 200, kCFStringEncodingUTF8))
 		{
-			return device_identifier_buffer;
+			return std::string(device_identifier_buffer);
 		}
 	}
 
-	return device_identifier;
+	return std::string();
 }
 
 CFStringRef create_CFString(const char* str)
@@ -183,7 +175,7 @@ CFStringRef create_CFString(const char* str)
 	return CFStringCreateWithCString(NULL, str, kCFStringEncodingUTF8);
 }
 
-int start_session(const char* device_identifier)
+int start_session(std::string device_identifier)
 {
 	if (devices[device_identifier].sessions < 1)
 	{
@@ -202,7 +194,7 @@ int start_session(const char* device_identifier)
 	return 0;
 }
 
-void stop_session(const char* device_identifier)
+void stop_session(std::string device_identifier)
 {
 	if (--devices[device_identifier].sessions < 1)
 	{
@@ -212,10 +204,10 @@ void stop_session(const char* device_identifier)
 	}
 }
 
-const char *get_device_property_value(const char* device_identifier, char* property_name)
+std::string get_device_property_value(std::string device_identifier, char* property_name)
 {
 	const DeviceInfo* device_info = devices[device_identifier].device_info;
-	const char *result = "";
+	std::string result;
 	if (!start_session(device_identifier))
 	{
 		CFStringRef cfstring = create_CFString(property_name);
@@ -227,7 +219,7 @@ const char *get_device_property_value(const char* device_identifier, char* prope
 	return result;
 }
 
-const char *get_device_status(const char* device_identifier)
+const char *get_device_status(std::string device_identifier)
 {
 	const char *result;
 	if (start_session(device_identifier))
@@ -243,7 +235,24 @@ const char *get_device_status(const char* device_identifier)
 	return result;
 }
 
-void get_device_properties(const char* device_identifier, json &result)
+void erase_safe(std::map<const char*, HANDLE>& m, const char* key)
+{
+	if (m.count(key))
+	{
+		m.erase(key);
+	}
+}
+
+void cleanup_file_resources(std::string device_identifier) {
+	erase_safe(devices[device_identifier].services, kAppleFileConnection);
+	erase_safe(devices[device_identifier].services, kHouseArrest);
+	if (devices[device_identifier].afc_conn_p) {
+		AFCConnectionClose(devices[device_identifier].afc_conn_p);
+		devices[device_identifier].afc_conn_p = nullptr;
+	}
+}
+
+void get_device_properties(std::string device_identifier, json &result)
 {
 	result["status"] = get_device_status(device_identifier);
 	result["productType"] = get_device_property_value(device_identifier, "ProductType");
@@ -254,7 +263,7 @@ void get_device_properties(const char* device_identifier, json &result)
 
 void device_notification_callback(const DevicePointer* device_ptr)
 {
-	const char *device_identifier = get_cstring_from_cfstring(AMDeviceCopyDeviceIdentifier(device_ptr->device_info));
+	std::string device_identifier = get_cstring_from_cfstring(AMDeviceCopyDeviceIdentifier(device_ptr->device_info));
 	json result;
 	result[kDeviceId] = device_identifier;
 	switch (device_ptr->msg)
@@ -272,8 +281,9 @@ void device_notification_callback(const DevicePointer* device_ptr)
 			{
 				if (devices[device_identifier].afc_conn_p)
 				{
-					AFCConnectionClose(devices[device_identifier].afc_conn_p);
+					cleanup_file_resources(device_identifier);
 				}
+
 				devices.erase(device_identifier);
 			}
 			result[kEventString] = kDeviceLost;
@@ -297,7 +307,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 }
 
 
-void print_error(const char *message, const char* device_identifier, std::string method_id, int code =
+void print_error(const char *message, std::string device_identifier, std::string method_id, int code =
 #ifdef _WIN32
                  GetLastError()
 #else
@@ -376,7 +386,7 @@ void start_run_loop()
 	CFRunLoopRun();
 }
 
-HANDLE start_service(const char* device_identifier, const char* service_name, std::string method_id)
+HANDLE start_service(std::string device_identifier, const char* service_name, std::string method_id)
 {
 	if (!devices.count(device_identifier))
 	{
@@ -407,7 +417,7 @@ HANDLE start_service(const char* device_identifier, const char* service_name, st
 	return socket;
 }
 
-HANDLE start_house_arrest(const char* device_identifier, const char* application_identifier, std::string method_id)
+HANDLE start_house_arrest(std::string device_identifier, const char* application_identifier, std::string method_id)
 {
 	if (!devices.count(device_identifier))
 	{
@@ -439,7 +449,7 @@ HANDLE start_house_arrest(const char* device_identifier, const char* application
 	return houseFd;
 }
 
-afc_connection *get_afc_connection(const char* device_identifier, const char* application_identifier, std::string method_id)
+afc_connection *get_afc_connection(std::string device_identifier, const char* application_identifier, std::string method_id)
 {
 	if (devices.count(device_identifier) && devices[device_identifier].services.count(kAppleFileConnection))
 	{
@@ -458,7 +468,7 @@ afc_connection *get_afc_connection(const char* device_identifier, const char* ap
 	return afc_conn_p;
 }
 
-void uninstall_application(std::string application_identifier, const char* device_identifier, std::string method_id)
+void uninstall_application(std::string application_identifier, std::string device_identifier, std::string method_id)
 {
 	if (!devices.count(device_identifier))
 	{
@@ -484,12 +494,11 @@ void uninstall_application(std::string application_identifier, const char* devic
 	{
 		print(json({{ kResponse, "Successfully uninstalled application" }, { kId, method_id }, { kDeviceId, device_identifier }}));
 		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
-		devices[device_identifier].services.erase(kAppleFileConnection);
-		devices[device_identifier].services.erase(kHouseArrest);
+		cleanup_file_resources(device_identifier);
 	}
 }
 
-void install_application(std::string install_path, const char* device_identifier, std::string method_id)
+void install_application(std::string install_path, std::string device_identifier, std::string method_id)
 {
 	if (!devices.count(device_identifier))
 	{
@@ -547,22 +556,24 @@ void install_application(std::string install_path, const char* device_identifier
 	}
 
 	print(json({ { kResponse, "Successfully installed application" }, { kId, method_id }, {kDeviceId, device_identifier}}));
+	// In case this is a REinstall we need to invalidate cached file resources
+	cleanup_file_resources(device_identifier);
 }
 
-void perform_detached_operation(void(*operation)(const char*, std::string), std::string arg, std::string method_id)
+void perform_detached_operation(void(*operation)(std::string, std::string), std::string arg, std::string method_id)
 {
-	std::thread([operation, arg, method_id]() { operation(arg.c_str(), method_id);  }).detach();
+	std::thread([operation, arg, method_id]() { operation(arg, method_id);  }).join();
 }
 
-void perform_detached_operation(void(*operation)(std::string, const char*, std::string), json method_args, std::string method_id)
+void perform_detached_operation(void(*operation)(std::string, std::string, std::string), json method_args, std::string method_id)
 {
 	std::string first_arg = method_args[0].get<std::string>();
 	std::vector<std::string> device_identifiers = method_args[1].get<std::vector<std::string>>();
 	for (std::string device_identifier : device_identifiers)
-		std::thread([operation, first_arg, device_identifier, method_id]() { operation(first_arg, device_identifier.c_str(), method_id);  }).detach();
+		std::thread([operation, first_arg, device_identifier, method_id]() { operation(first_arg, device_identifier, method_id);  }).join();
 }
 
-void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::string method_id, const char* device_identifier)
+void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::string method_id, std::string device_identifier)
 {
 	char *dir_ent;
 	files.push_back(dir);
@@ -635,27 +646,6 @@ void list_files(const char *device_identifier, const char *application_identifie
 	std::string device_path_str = windows_path_to_unix(device_path);
 	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, method_id, device_identifier);
 	print(json({{ kResponse, files }, { kId, method_id }, { kDeviceId, device_identifier }}));
-}
-
-void* read_file_to_memory(char * path, size_t* file_size)
-{
-	struct stat buf;
-	int err = stat(path, &buf);
-	if (err < 0)
-	{
-		return NULL;
-	}
-
-	*file_size = buf.st_size;
-	FILE* fd = fopen(path, "r");
-	char* content = (char*)malloc(*file_size);
-	if (fread(content, *file_size, 1, fd) != 1)
-	{
-		fclose(fd);
-		return NULL;
-	}
-	fclose(fd);
-	return content;
 }
 
 bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id, const char * device_identifier)
@@ -796,7 +786,7 @@ void read_file(const char *device_identifier, const char *application_identifier
 	print(json({{ kResponse, result },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
-void get_application_infos(const char *device_identifier, std::string method_id)
+void get_application_infos(std::string device_identifier, std::string method_id)
 {
 	HANDLE socket = start_service(device_identifier, kInstallationProxy, method_id);
 	if (!socket)
@@ -860,7 +850,7 @@ void get_application_infos(const char *device_identifier, std::string method_id)
 	print(json({ { kResponse, livesync_app_infos }, { kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
-void device_log(const char* device_identifier, std::string method_id)
+void device_log(std::string device_identifier, std::string method_id)
 {
 	HANDLE socket = start_service(device_identifier, kSyslog, method_id);
 	if (!socket)
@@ -882,7 +872,7 @@ void device_log(const char* device_identifier, std::string method_id)
 	free(buffer);
 }
 
-void post_notification(const char* device_identifier, std::string notification_name, std::string method_id)
+void post_notification(std::string device_identifier, std::string notification_name, std::string method_id)
 {
 	HANDLE socket = start_service(device_identifier, kNotificationProxy, method_id);
 	if (!socket)
