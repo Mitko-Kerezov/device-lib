@@ -26,6 +26,8 @@
 #endif
 
 #pragma region Constants
+const unsigned kArgumentError = 3;
+
 const unsigned kADNCIMessageConnected = 1;
 const unsigned kADNCIMessageDisconnected = 2;
 const unsigned kADNCIMessageUnknown = 3;
@@ -57,6 +59,11 @@ const char *kDeviceUnknown = "deviceUnknown";
 const char *kId = "id";
 const char *kNullMessageId = "null";
 const char *kDeviceId = "deviceId";
+const char *kAppId = "appId";
+const char *kNotificationName = "notificationName";
+const char *kDestination = "destination";
+const char *kSource = "source";
+const char *kPath = "path";
 const char *kError = "error";
 const char *kResponse = "response";
 const char *kMessage = "message";
@@ -562,15 +569,15 @@ void install_application(std::string install_path, std::string device_identifier
 
 void perform_detached_operation(void(*operation)(std::string, std::string), std::string arg, std::string method_id)
 {
-	std::thread([operation, arg, method_id]() { operation(arg, method_id);  }).join();
+	std::thread([operation, arg, method_id]() { operation(arg, method_id);  }).detach();
 }
 
 void perform_detached_operation(void(*operation)(std::string, std::string, std::string), json method_args, std::string method_id)
 {
 	std::string first_arg = method_args[0].get<std::string>();
 	std::vector<std::string> device_identifiers = method_args[1].get<std::vector<std::string>>();
-	for (std::string device_identifier : device_identifiers)
-		std::thread([operation, first_arg, device_identifier, method_id]() { operation(first_arg, device_identifier, method_id);  }).join();
+	for (std::string &device_identifier : device_identifiers)
+		std::thread([operation, first_arg, device_identifier, method_id]() { operation(first_arg, device_identifier, method_id);  }).detach();
 }
 
 void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::string method_id, std::string device_identifier)
@@ -652,7 +659,7 @@ bool ensure_device_path_exists(std::string &device_path, afc_connection *connect
 {
 	std::vector<std::string> directories = split(device_path, kUnixPathSeparator);
 	std::string curent_device_path("");
-	for (std::string directory_path : directories)
+	for (std::string &directory_path : directories)
 	{
 		if (!directory_path.empty())
 		{
@@ -835,7 +842,7 @@ void get_application_infos(std::string device_identifier, std::string method_id)
 			break;
 		}
 		std::vector<boost::any> current_list = boost::any_cast<std::vector<boost::any>>(dict["CurrentList"]);
-		for (boost::any list : current_list)
+		for (boost::any &list : current_list)
 		{
 			std::map<std::string, boost::any> app_info = boost::any_cast<std::map<std::string, boost::any>>(list);
 			json current_info = {
@@ -905,6 +912,48 @@ void post_notification(std::string device_identifier, std::string notification_n
 	print(json({ { kResponse, "Successfully sent notification" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
+bool validate(const json& j, std::string key, std::string method_id, std::string device_identifier = kNullMessageId)
+{
+	std::stringstream error;
+	if (j.count(key) == 0)
+	{
+		error << "Argument " + key + " is missing";
+		print_error(error.str().c_str(), device_identifier, method_id, kArgumentError);
+		return false;
+	}
+
+	json::const_iterator entry = j.find(key);
+	json value = entry.value();
+	if (!value.is_string()) {
+		error << "Argument " + key + " has incorrect value";
+		print_error(error.str().c_str(), device_identifier, method_id, kArgumentError);
+		return false;
+	}
+	return true;
+}
+
+bool validate(const json& j, std::vector<std::string> attributes, std::string method_id, std::string device_identifier)
+{
+	for (std::string key : attributes)
+		if (!validate(j, key, method_id, device_identifier))
+			return false;
+
+	return true;
+}
+
+bool validate_device_id_and_attrs(const json& j, std::string method_id, std::vector<std::string> attrs)
+{
+	if (!validate(j, kDeviceId, method_id))
+		return false;
+
+	std::string device_identifier = j.value(kDeviceId, "");
+
+	if (!validate(j, attrs, device_identifier, method_id))
+		return false;
+
+	return true;
+}
+
 int main()
 {
 #ifdef _WIN32
@@ -914,7 +963,7 @@ int main()
 #endif
     
 	std::thread([]() { start_run_loop(); }).detach();
-	
+
 	for (std::string line; std::getline(std::cin, line);)
 	{
 		json message = json::parse(line.c_str());
@@ -934,76 +983,94 @@ int main()
 			}
 			else if (method_name == "list")
 			{
-				for (json arg : method_args)
+				for (json &arg : method_args)
 				{
-					std::string application_identifier = arg.value("appId", "");
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kPath}))
+						continue;
+
 					std::string device_identifier = arg.value(kDeviceId, "");
-					std::string path = arg.value("path", "");
+					std::string application_identifier = arg.value(kAppId, "");
+					std::string path = arg.value(kPath, "");
 					list_files(device_identifier.c_str(), application_identifier.c_str(), path.c_str(), method_id);
 				}
 			}
 			else if (method_name == "upload")
 			{
-				for (json arg : method_args)
+				for (json &arg : method_args)
 				{
-					std::string application_identifier = arg.value("appId", "");
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kSource, kDestination }))
+						continue;
+
+					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
-					std::string source = arg.value("source", "");
-					std::string destination = arg.value("destination", "");
+					std::string source = arg.value(kSource, "");
+					std::string destination = arg.value(kDestination, "");
 					upload_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), destination.c_str(), method_id);
 				}
 			}
 			else if (method_name == "delete")
 			{
-				for (json arg : method_args)
+				for (json &arg : method_args)
 				{
-					std::string application_identifier = arg.value("appId", "");
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDestination }))
+						continue;
+
+					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
-					std::string destination = arg.value("destination", "");
+					std::string destination = arg.value(kDestination, "");
 					delete_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str(), method_id);
 				}
 			}
 			else if (method_name == "read")
 			{
-				for (json arg : method_args)
+				for (json &arg : method_args)
 				{
-					std::string application_identifier = arg.value("appId", "");
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kPath }))
+						continue;
+
+					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
-					std::string path = arg.value("path", "");
+					std::string path = arg.value(kPath, "");
 					read_file(device_identifier.c_str(), application_identifier.c_str(), path.c_str(), method_id);
 				}
 			}
 			else if (method_name == "download")
 			{
-				for (json arg : method_args)
+				for (json &arg : method_args)
 				{
-					std::string application_identifier = arg.value("appId", "");
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDeviceId, kDestination }))
+						continue;
+
+					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
-					std::string source = arg.value("source", "");
-					std::string destination = arg.value("destination", "");
+					std::string source = arg.value(kSource, "");
+					std::string destination = arg.value(kDestination, "");
 					read_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), method_id, destination.c_str());
 				}
 			}
 			else if (method_name == "apps")
 			{
-				for (json device_identifier_json : method_args) {
+				for (json &device_identifier_json : method_args) {
 					std::string device_identifier = device_identifier_json.get<std::string>();
 					perform_detached_operation(get_application_infos, device_identifier, method_id);
 				}
 			}
 			else if (method_name == "log")
 			{
-				for (json device_identifier_json : method_args) {
+				for (json &device_identifier_json : method_args) {
 					std::string device_identifier = device_identifier_json.get<std::string>();
 					perform_detached_operation(device_log, device_identifier, method_id);
 				}
 			}
 			else if (method_name == "notify")
 			{
-				for (json arg : method_args)
+				for (json &arg : method_args)
 				{
+					if (!validate_device_id_and_attrs(arg, method_id, { kNotificationName }))
+						continue;
+
 					std::string device_identifier = arg.value(kDeviceId, "");
-					std::string notification_name = arg.value("notificationName", "");
+					std::string notification_name = arg.value(kNotificationName, "");
 					post_notification(device_identifier.c_str(), notification_name.c_str(), method_id);
 				}
 			}
