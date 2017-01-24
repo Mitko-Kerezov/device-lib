@@ -64,6 +64,15 @@ declare module IOSDeviceLib {
 		message: string;
 	}
 
+	interface IDeviceApplication {
+		CFBundleExecutable: string;
+		Path: string;
+	}
+
+	interface IDeviceLookupInfo extends IDeviceId {
+		response: { [key: string]: IDeviceApplication };
+	}
+
 	interface IOSDeviceLib extends NodeJS.EventEmitter {
 		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void): IOSDeviceLib;
 		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
@@ -75,6 +84,7 @@ declare module IOSDeviceLib {
 		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse>[];
 		notify(notifyArray: INotifyData): Promise<IDeviceResponse>[];
 		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
+		lookup(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
 		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): NodeJS.EventEmitter;

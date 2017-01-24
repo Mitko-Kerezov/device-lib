@@ -1,3 +1,4 @@
+#include <bitset>
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -28,6 +29,7 @@
 #pragma region Constants
 const unsigned kArgumentError = 3;
 const unsigned kAFCCustomError = 4;
+const unsigned kApplicationsCustomError = 5;
 
 const unsigned kADNCIMessageConnected = 1;
 const unsigned kADNCIMessageDisconnected = 2;
@@ -106,8 +108,11 @@ LengthEncodedMessage get_message_with_encoded_length(const char* message)
 void print(const char* str)
 {
 	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(str);
+	char* buff = new char[length_encoded_message.length];
+	std::setvbuf(stdout, buff, _IOFBF, length_encoded_message.length);
 	fwrite(length_encoded_message.message, length_encoded_message.length, 1, stdout);
 	fflush(stdout);
+	delete[] buff;
 }
 
 void print(const json& message)
@@ -165,17 +170,17 @@ std::string windows_path_to_unix(const char *path)
 
 std::string get_cstring_from_cfstring(CFStringRef cfstring)
 {
-	const char * device_identifier = CFStringGetCStringPtr(cfstring, kCFStringEncodingUTF8);
-	char device_identifier_buffer[200];
-	if (device_identifier == NULL)
+	const char * result_attempt = CFStringGetCStringPtr(cfstring, kCFStringEncodingUTF8);
+	char cfstring_buffer[2000];
+	if (result_attempt == NULL)
 	{
-		if (CFStringGetCString(cfstring, device_identifier_buffer, 200, kCFStringEncodingUTF8))
+		if (CFStringGetCString(cfstring, cfstring_buffer, 2000, kCFStringEncodingUTF8))
 		{
-			return std::string(device_identifier_buffer);
+			return std::string(cfstring_buffer);
 		}
 	}
 
-	return std::string();
+	return std::string(result_attempt);
 }
 
 CFStringRef create_CFString(const char* str)
@@ -869,6 +874,73 @@ void get_application_infos(std::string device_identifier, std::string method_id)
 	print(json({ { kResponse, livesync_app_infos }, { kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
+std::map<std::string, std::string> parse_cfdictionary(CFDictionaryRef dict)
+{
+	std::map<std::string, std::string> result;
+	unsigned count = CFDictionaryGetCount(dict);
+	void** keys = new void*[count];
+	void** values = new void*[count];
+	CFDictionaryGetKeysAndValues(dict, keys, values);
+	for (size_t index = 0; index < count; index++)
+	{
+		void* value = values[index];
+		std::string key = get_cstring_from_cfstring(keys[index]);
+		if (CFGetTypeID(value) == CFStringGetTypeID())
+		{
+			result[key] = get_cstring_from_cfstring(value);
+		}
+	}
+
+	delete[] keys;
+	delete[] values;
+
+	return result;
+}
+
+std::map<std::string, std::map<std::string, std::string>> parse_lookup_cfdictionary(CFDictionaryRef dict)
+{
+	// The dictionary may contain elements whose values are not strings
+	// However those are filtered out
+	// In the future if we ever need more information about applications this would be a perfect place to look
+	std::map<std::string, std::map<std::string, std::string>> result;
+	unsigned count = CFDictionaryGetCount(dict);
+	void** keys = new void*[count];
+	void** values = new void*[count];
+	CFDictionaryGetKeysAndValues(dict, keys, values);
+	for (size_t index = 0; index < count; index++)
+	{
+		std::string key = get_cstring_from_cfstring(keys[index]);
+		result[key] = parse_cfdictionary(values[index]);
+	}
+
+	delete[] keys;
+	delete[] values;
+
+	return result;
+}
+
+void lookup_apps(std::string device_identifier, std::string method_id)
+{
+	CFDictionaryRef result = NULL;
+	if (!start_session(device_identifier))
+	{
+		if (AMDeviceLookupApplications(devices[device_identifier].device_info, NULL, &result))
+		{
+			print_error("Lookup applications failed", device_identifier, method_id, kApplicationsCustomError);
+		}
+		else
+		{
+			// The result from AMDeviceLookupApplications is actually a dictionary
+			// Very much resembling a plist
+			// It contains a lot of information about the app, but right now we only care for the properties `CFBundleExecutable` and `Path`
+			std::map<std::string, std::map<std::string, std::string>> map = parse_lookup_cfdictionary(result);
+			print(json({ { kResponse, map }, { kId, method_id }, { kDeviceId, device_identifier } }));
+		}
+	}
+
+	stop_session(device_identifier);
+}
+
 void device_log(std::string device_identifier, std::string method_id)
 {
 	HANDLE socket = start_service(device_identifier, kSyslog, method_id);
@@ -1086,21 +1158,11 @@ int main()
 					post_notification(device_identifier.c_str(), notification_name.c_str(), method_id);
 				}
 			}
-			else if (method_name == "ceco")
+			else if (method_name == "lookup")
 			{
-				for (json &arg : method_args)
-				{
-					std::string device_identifier = arg.value(kDeviceId, "");
-					unsigned int app_type = 0;
-					/*const void *keys_arr[10000] = { };
-					const void *values_arr[10000] = { };
-					CFDictionaryRef result = CFDictionaryCreate(NULL, keys_arr, values_arr, 1, NULL, NULL);*/
-					//char *buf = new char[1024];
-
-					void* result = malloc(1000);
-
-					auto r = AMDeviceLookupApplications(devices[device_identifier].device_info, app_type, result);
-					int a = 5;
+				for (json &device_identifier_json : method_args) {
+					std::string device_identifier = device_identifier_json.get<std::string>();
+					perform_detached_operation(lookup_apps, device_identifier, method_id);
 				}
 			}
 			else if (method_name == "exit")
