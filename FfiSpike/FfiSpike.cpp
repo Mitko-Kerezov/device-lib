@@ -1086,6 +1086,23 @@ int main()
 					post_notification(device_identifier.c_str(), notification_name.c_str(), method_id);
 				}
 			}
+			else if (method_name == "ceco")
+			{
+				for (json &arg : method_args)
+				{
+					std::string device_identifier = arg.value(kDeviceId, "");
+					unsigned int app_type = 0;
+					/*const void *keys_arr[10000] = { };
+					const void *values_arr[10000] = { };
+					CFDictionaryRef result = CFDictionaryCreate(NULL, keys_arr, values_arr, 1, NULL, NULL);*/
+					//char *buf = new char[1024];
+
+					void* result = malloc(1000);
+
+					auto r = AMDeviceLookupApplications(devices[device_identifier].device_info, app_type, result);
+					int a = 5;
+				}
+			}
 			else if (method_name == "exit")
 			{
 				return 0;

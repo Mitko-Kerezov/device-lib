@@ -121,6 +121,7 @@ typedef unsigned(__cdecl *afc_get_device_info_key)(afc_connection*, const char *
 typedef unsigned(__cdecl *afc_fileref_write)(afc_connection*, afc_file_ref, const void*, size_t);
 typedef unsigned(__cdecl *afc_fileref_close)(afc_connection*, afc_file_ref);
 typedef unsigned(__cdecl *device_start_house_arrest)(const DeviceInfo*, CFStringRef, void*, HANDLE*, unsigned int*);
+typedef unsigned(__cdecl *device_lookup_applications)(const DeviceInfo*, unsigned int, void*);
 
 #endif // _WIN32
 #pragma endregion Dll_Type_Definitions
@@ -146,6 +147,7 @@ device_connection_operation __AMDeviceValidatePairing;
 device_secure_operation_with_path __AMDeviceSecureTransferPath;
 device_secure_operation_with_path __AMDeviceSecureInstallApplication;
 device_start_house_arrest __AMDeviceStartHouseArrestService;
+device_lookup_applications __AMDeviceLookupApplications;
 
 cfstring_get_c_string_ptr __CFStringGetCStringPtr;
 cfstring_get_c_string __CFStringGetCString;
@@ -189,6 +191,7 @@ afc_fileref_close __AFCFileRefClose;
 #define AMDeviceSecureTransferPath GET_IF_EXISTS(__AMDeviceSecureTransferPath, device_secure_operation_with_path, mobile_device_dll, "AMDeviceSecureTransferPath")
 #define AMDeviceSecureInstallApplication GET_IF_EXISTS(__AMDeviceSecureInstallApplication, device_secure_operation_with_path, mobile_device_dll, "AMDeviceSecureInstallApplication")
 #define AMDeviceStartHouseArrestService GET_IF_EXISTS(__AMDeviceStartHouseArrestService, device_start_house_arrest, mobile_device_dll, "AMDeviceStartHouseArrestService")
+#define AMDeviceLookupApplications GET_IF_EXISTS(__AMDeviceLookupApplications, device_lookup_applications, mobile_device_dll, "AMDeviceLookupApplications")
 
 #define CFStringGetCStringPtr GET_IF_EXISTS(__CFStringGetCStringPtr, cfstring_get_c_string_ptr, core_foundation_dll, "CFStringGetCStringPtr")
 #define CFStringGetCString GET_IF_EXISTS(__CFStringGetCString, cfstring_get_c_string, core_foundation_dll, "CFStringGetCString")
