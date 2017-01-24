@@ -19,6 +19,11 @@ struct LengthEncodedMessage {
     }
 };
 
+struct DeviceApplication {
+	std::string CFBundleExecutable;
+	std::string Path;
+};
+
 struct DeviceInfo {
     unsigned char unknown0[16]; /* 0 - zero */
     unsigned int device_id;     /* 16 */
@@ -100,6 +105,10 @@ typedef unsigned(__cdecl *device_connection_operation)(const DeviceInfo*);
 typedef unsigned(__cdecl *device_start_service)(const DeviceInfo*, CFStringRef, HANDLE*, void*);
 typedef const char*(__cdecl *cfstring_get_c_string_ptr)(void*, unsigned);
 typedef bool(__cdecl *cfstring_get_c_string)(void*, char*, unsigned, unsigned);
+typedef unsigned long(__cdecl *cf_get_type_id)(void*);
+typedef unsigned long(__cdecl *cf_get_concrete_type_id)();
+typedef unsigned(__cdecl *cfdictionary_get_count)(CFDictionaryRef);
+typedef void(__cdecl *cfdictionary_get_keys_and_values)(CFDictionaryRef, void**, void**);
 typedef CFStringRef(__cdecl *cfstring_create_with_cstring)(void*, const char*, unsigned);
 typedef unsigned(__cdecl *device_secure_operation_with_path)(int, const DeviceInfo*, CFURLRef, CFDictionaryRef, void(*f)(), int);
 typedef void(__cdecl *cfrelease)(CFStringRef);
@@ -121,6 +130,7 @@ typedef unsigned(__cdecl *afc_get_device_info_key)(afc_connection*, const char *
 typedef unsigned(__cdecl *afc_fileref_write)(afc_connection*, afc_file_ref, const void*, size_t);
 typedef unsigned(__cdecl *afc_fileref_close)(afc_connection*, afc_file_ref);
 typedef unsigned(__cdecl *device_start_house_arrest)(const DeviceInfo*, CFStringRef, void*, HANDLE*, unsigned int*);
+typedef unsigned(__cdecl *device_lookup_applications)(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
 
 #endif // _WIN32
 #pragma endregion Dll_Type_Definitions
@@ -146,9 +156,15 @@ device_connection_operation __AMDeviceValidatePairing;
 device_secure_operation_with_path __AMDeviceSecureTransferPath;
 device_secure_operation_with_path __AMDeviceSecureInstallApplication;
 device_start_house_arrest __AMDeviceStartHouseArrestService;
+device_lookup_applications __AMDeviceLookupApplications;
 
 cfstring_get_c_string_ptr __CFStringGetCStringPtr;
 cfstring_get_c_string __CFStringGetCString;
+cf_get_type_id __CFGetTypeID;
+cf_get_concrete_type_id __CFStringGetTypeID;
+cf_get_concrete_type_id __CFDictionaryGetTypeID;
+cfdictionary_get_count __CFDictionaryGetCount;
+cfdictionary_get_keys_and_values __CFDictionaryGetKeysAndValues;
 cfstring_create_with_cstring __CFStringCreateWithCString;
 cfurl_create_with_string __CFURLCreateWithString;
 cfdictionary_create __CFDictionaryCreate;
@@ -189,9 +205,15 @@ afc_fileref_close __AFCFileRefClose;
 #define AMDeviceSecureTransferPath GET_IF_EXISTS(__AMDeviceSecureTransferPath, device_secure_operation_with_path, mobile_device_dll, "AMDeviceSecureTransferPath")
 #define AMDeviceSecureInstallApplication GET_IF_EXISTS(__AMDeviceSecureInstallApplication, device_secure_operation_with_path, mobile_device_dll, "AMDeviceSecureInstallApplication")
 #define AMDeviceStartHouseArrestService GET_IF_EXISTS(__AMDeviceStartHouseArrestService, device_start_house_arrest, mobile_device_dll, "AMDeviceStartHouseArrestService")
+#define AMDeviceLookupApplications GET_IF_EXISTS(__AMDeviceLookupApplications, device_lookup_applications, mobile_device_dll, "AMDeviceLookupApplications")
 
 #define CFStringGetCStringPtr GET_IF_EXISTS(__CFStringGetCStringPtr, cfstring_get_c_string_ptr, core_foundation_dll, "CFStringGetCStringPtr")
 #define CFStringGetCString GET_IF_EXISTS(__CFStringGetCString, cfstring_get_c_string, core_foundation_dll, "CFStringGetCString")
+#define CFGetTypeID GET_IF_EXISTS(__CFGetTypeID, cf_get_type_id, core_foundation_dll, "CFGetTypeID")
+#define CFStringGetTypeID GET_IF_EXISTS(__CFStringGetTypeID, cf_get_concrete_type_id, core_foundation_dll, "CFStringGetTypeID")
+#define CFDictionaryGetTypeID GET_IF_EXISTS(__CFDictionaryGetTypeID, cf_get_concrete_type_id, core_foundation_dll, "CFDictionaryGetTypeID")
+#define CFDictionaryGetCount GET_IF_EXISTS(__CFDictionaryGetCount, cfdictionary_get_count, core_foundation_dll, "CFDictionaryGetCount")
+#define CFDictionaryGetKeysAndValues GET_IF_EXISTS(__CFDictionaryGetKeysAndValues, cfdictionary_get_keys_and_values, core_foundation_dll, "CFDictionaryGetKeysAndValues")
 #define CFStringCreateWithCString GET_IF_EXISTS(__CFStringCreateWithCString, cfstring_create_with_cstring, core_foundation_dll, "CFStringCreateWithCString")
 #define CFURLCreateWithString GET_IF_EXISTS(__CFURLCreateWithString, cfurl_create_with_string, core_foundation_dll, "CFURLCreateWithString")
 #define CFDictionaryCreate GET_IF_EXISTS(__CFDictionaryCreate, cfdictionary_create, core_foundation_dll, "CFDictionaryCreate")
