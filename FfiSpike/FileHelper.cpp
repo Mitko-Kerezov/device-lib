@@ -32,15 +32,16 @@ FileInfo get_file_info(std::string& path, bool get_contents)
 	return result;
 }
 
-std::string base64_encode(const char *bytes_to_encode, unsigned in_len) {
+std::string base64_encode(const char *path, unsigned int len)
+{
 	std::string ret;
 	int i = 0;
 	int j = 0;
 	unsigned char char_array_3[3];
 	unsigned char char_array_4[4];
 
-	while (in_len--) {
-		char_array_3[i++] = *(bytes_to_encode++);
+	while (len--) {
+		char_array_3[i++] = *(path++);
 		if (i == 3) {
 			char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
 			char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);

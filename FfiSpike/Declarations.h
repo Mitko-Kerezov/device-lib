@@ -8,16 +8,6 @@ typedef unsigned long long SOCKET;
 
 #pragma region Data_Structures_Definition
 
-struct LengthEncodedMessage {
-    char *message;
-    size_t length;
-    
-    ~LengthEncodedMessage()
-    {
-        free(message);
-    }
-};
-
 struct DeviceApplication {
 	std::string CFBundleExecutable;
 	std::string Path;

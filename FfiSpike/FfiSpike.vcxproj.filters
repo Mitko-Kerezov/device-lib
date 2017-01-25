@@ -33,6 +33,9 @@
     <ClCompile Include="FileHelper.cpp">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="SocketHelper.cpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PlistCpp\base64.hpp">
@@ -846,6 +849,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FileHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SocketHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -21,6 +21,7 @@
 #include "PlistCpp/PlistDate.hpp"
 #include "PlistCpp/include/boost/any.hpp"
 #include "FileHelper.h"
+#include "SocketHelper.h"
 #include "Declarations.h"
 
 #ifndef _WIN32
@@ -95,20 +96,6 @@ using json = nlohmann::json;
 
 int __result;
 std::map<std::string, DeviceData> devices;
-
-LengthEncodedMessage get_message_with_encoded_length(const char* message, long long length = -1)
-{
-	if (length < 0)
-		length = strlen(message);
-
-	unsigned long message_len = length + 4;
-	char *length_encoded_message = new char[message_len];
-	unsigned long packed_length = htonl(length);
-    size_t packed_length_size = 4;
-	memcpy(length_encoded_message, &packed_length, packed_length_size);
-	memcpy(length_encoded_message + packed_length_size, message, length);
-	return{ length_encoded_message, message_len };
-}
 
 void print(const char* str)
 {
@@ -514,26 +501,6 @@ void uninstall_application(std::string application_identifier, std::string devic
 		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
 		cleanup_file_resources(device_identifier);
 	}
-}
-
-int send_message(const char* message, SOCKET socket, long long length = -1)
-{
-	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(message, length);
-	return send(socket, length_encoded_message.message, length_encoded_message.length, 0);
-}
-
-std::map<std::string, boost::any> receive_message(SOCKET socket)
-{
-	std::map<std::string, boost::any> dict;
-	char *buffer = new char[4];
-	int bytes_read = recv(socket, buffer, 4, 0);
-	unsigned long res = ntohl(*((unsigned long*)buffer));
-	delete[] buffer;
-	buffer = new char[res];
-	bytes_read = recv(socket, buffer, res, 0);
-	Plist::readPlist(buffer, res, dict);
-	delete[] buffer;
-	return dict;
 }
 
 void install_application(std::string install_path, std::string device_identifier, std::string method_id)
@@ -1147,7 +1114,12 @@ void start_app(std::string device_identifier, std::string application_identifier
 			return;
 		}
 
-		mount_image(device_identifier, ddi, method_id);
+		if (mount_image(device_identifier, ddi, method_id))
+		{
+			HANDLE gdb = start_service(device_identifier, kDebugServer, method_id);
+			std::string executable = map[application_identifier]["Path"] + map[application_identifier]["CFBundleExecutable"];
+			int a = -5;
+		}
 	}
 	else
 	{
