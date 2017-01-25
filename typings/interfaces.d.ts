@@ -82,7 +82,7 @@ declare module IOSDeviceLib {
 		download(downloadArray: IFileOperationData[]): Promise<IDeviceResponse>[];
 		read(readArray: IReadOperationData[]): Promise<IDeviceResponse>[];
 		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse>[];
-		notify(notifyArray: INotifyData): Promise<IDeviceResponse>[];
+		notify(notifyArray: INotifyData[]): Promise<IDeviceResponse>[];
 		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
 		lookup(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
