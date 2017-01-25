@@ -1,5 +1,4 @@
-#ifndef Declarations_h
-#define Declarations_h
+#pragma once
 
 #ifndef _WIN32
 typedef void* HANDLE;
@@ -190,6 +189,8 @@ afc_fileref_close __AFCFileRefClose;
 #pragma region Dll_Method_Definitions
 
 #ifdef _WIN32
+#define GET_IF_EXISTS(variable, type, dll, method_name) (variable ? variable : variable = (type)GetProcAddress(dll, method_name))
+
 #define AMDeviceNotificationSubscribe GET_IF_EXISTS(__AMDeviceNotificationSubscribe, device_notification_subscribe_ptr, mobile_device_dll, "AMDeviceNotificationSubscribe")
 #define AMDeviceCopyDeviceIdentifier GET_IF_EXISTS(__AMDeviceCopyDeviceIdentifier, device_copy_device_identifier, mobile_device_dll, "AMDeviceCopyDeviceIdentifier")
 #define AMDeviceCopyValue GET_IF_EXISTS(__AMDeviceCopyValue, device_copy_value, mobile_device_dll, "AMDeviceCopyValue")
@@ -274,5 +275,3 @@ extern "C"
 }
 
 #endif // !_WIN32
-
-#endif /* Declarations_h */

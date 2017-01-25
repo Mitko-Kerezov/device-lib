@@ -20,6 +20,7 @@
 #include "PlistCpp/Plist.hpp"
 #include "PlistCpp/PlistDate.hpp"
 #include "PlistCpp/include/boost/any.hpp"
+#include "FileHelper.h"
 #include "Declarations.h"
 
 #ifndef _WIN32
@@ -62,12 +63,15 @@ const char *kDeviceUnknown = "deviceUnknown";
 const char *kId = "id";
 const char *kNullMessageId = "null";
 const char *kDeviceId = "deviceId";
+const char *kDeveloperDiskImage = "ddi";
 const char *kAppId = "appId";
 const char *kNotificationName = "notificationName";
 const char *kDestination = "destination";
 const char *kSource = "source";
 const char *kPath = "path";
 const char *kError = "error";
+const char *kErrorKey = "Error";
+const char *kStatusKey = "Status";
 const char *kResponse = "response";
 const char *kMessage = "message";
 const char *kCode = "code";
@@ -86,22 +90,23 @@ const std::string file_prefix("file:///");
 #define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
 #define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id, value) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return value; }
 #define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
-#define GET_IF_EXISTS(variable, type, dll, method_name) (variable ? variable : variable = (type)GetProcAddress(dll, method_name))
 
 using json = nlohmann::json;
 
 int __result;
 std::map<std::string, DeviceData> devices;
 
-LengthEncodedMessage get_message_with_encoded_length(const char* message)
+LengthEncodedMessage get_message_with_encoded_length(const char* message, long long length = -1)
 {
-	size_t original_message_len = strlen(message);
-	unsigned long message_len = original_message_len + 4;
+	if (length < 0)
+		length = strlen(message);
+
+	unsigned long message_len = length + 4;
 	char *length_encoded_message = new char[message_len];
-	unsigned long packed_length = htonl(original_message_len);
+	unsigned long packed_length = htonl(length);
     size_t packed_length_size = 4;
 	memcpy(length_encoded_message, &packed_length, packed_length_size);
-	memcpy(length_encoded_message + packed_length_size, message, original_message_len);
+	memcpy(length_encoded_message + packed_length_size, message, length);
 	return{ length_encoded_message, message_len };
 }
 
@@ -464,7 +469,7 @@ HANDLE start_house_arrest(std::string device_identifier, const char* application
 
 afc_connection *get_afc_connection(std::string device_identifier, const char* application_identifier, std::string method_id)
 {
-	if (devices.count(device_identifier) && devices[device_identifier].services.count(kAppleFileConnection))
+	if (devices.count(device_identifier) && devices[device_identifier].afc_conn_p)
 	{
 		return devices[device_identifier].afc_conn_p;
 	}
@@ -509,6 +514,26 @@ void uninstall_application(std::string application_identifier, std::string devic
 		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
 		cleanup_file_resources(device_identifier);
 	}
+}
+
+int send_message(const char* message, SOCKET socket, long long length = -1)
+{
+	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(message, length);
+	return send(socket, length_encoded_message.message, length_encoded_message.length, 0);
+}
+
+std::map<std::string, boost::any> receive_message(SOCKET socket)
+{
+	std::map<std::string, boost::any> dict;
+	char *buffer = new char[4];
+	int bytes_read = recv(socket, buffer, 4, 0);
+	unsigned long res = ntohl(*((unsigned long*)buffer));
+	delete[] buffer;
+	buffer = new char[res];
+	bytes_read = recv(socket, buffer, res, 0);
+	Plist::readPlist(buffer, res, dict);
+	delete[] buffer;
+	return dict;
 }
 
 void install_application(std::string install_path, std::string device_identifier, std::string method_id)
@@ -641,7 +666,71 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 	}
 }
 
-void list_files(const char *device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
+#ifdef _WIN32
+bool mount_image(std::string device_identifier, std::string image_path, std::string method_id)
+{
+	std::string image_signature_path = image_path + ".signature";
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(!exists(image_signature_path), "Could not find developer disk image signature", device_identifier, method_id, false);
+
+	HANDLE mountFd = start_service(device_identifier, kMobileImageMounter, method_id);
+	if (!mountFd)
+	{
+		return false;
+	}
+
+	FileInfo image_file_info = get_file_info(image_path, false);
+	FileInfo signature_file_info = get_file_info(image_signature_path, true);
+	std::string signature_base64 = base64_encode(&signature_file_info.contents[0], signature_file_info.size);
+	std::stringstream xml_command;
+	xml_command << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+		"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+		"<plist version=\"1.0\">"
+			"<dict>"
+				"<key>Command</key>"
+				"<string>ReceiveBytes</string>"
+				"<key>ImageSize</key>"
+				"<integer>" + std::to_string(image_file_info.size) + "</integer>"
+				"<key>ImageType</key>"
+				"<string>Developer</string>"
+				"<key>ImageSignature</key>"
+				"<data>" + signature_base64 + "</data>"
+			"</dict>"
+		"</plist>";
+
+	int bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
+	std::map<std::string, boost::any> dict = receive_message((SOCKET)mountFd);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
+	if (boost::any_cast<std::string>(dict[kStatusKey]) == "ReceiveBytesAck")
+	{
+		image_file_info = get_file_info(image_path, true);
+		int bytes_sent = send_message(&image_file_info.contents[0], (SOCKET)mountFd, image_file_info.size);
+		xml_command << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+			"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+			"<plist version=\"1.0\">"
+				"<dict>"
+					"<key>Command</key>"
+					"<string>MountImage</string>"
+					"<key>ImageType</key>"
+					"<string>Developer</string>"
+					"<key>ImageSignature</key>"
+					"<data>" + signature_base64 + "</data>"
+					"<key>ImagePath</key>"
+					"<string>/var/mobile/Media/PublicStaging/staging.dimage</string>"
+				"</dict>"
+			"</plist>";
+		std::map<std::string, boost::any> answer = receive_message((SOCKET)mountFd);
+		PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(answer.count(kErrorKey), boost::any_cast<std::string>(answer[kErrorKey]).c_str(), device_identifier, method_id, false);
+
+	}
+	else
+	{
+		// This has not been tested!
+		int a = 5;
+	}
+}
+#endif // _WIN32
+
+void list_files(std:: string device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
 {
 	HANDLE houseFd = start_house_arrest(device_identifier, application_identifier, method_id);
 	if (!houseFd)
@@ -672,7 +761,7 @@ void list_files(const char *device_identifier, const char *application_identifie
 	}
 }
 
-bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id, const char * device_identifier)
+bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id, std::string device_identifier)
 {
 	std::vector<std::string> directories = split(device_path, kUnixPathSeparator);
 	std::string curent_device_path("");
@@ -689,7 +778,7 @@ bool ensure_device_path_exists(std::string &device_path, afc_connection *connect
 	return true;
 }
 
-void upload_file(const char *device_identifier, const char *application_identifier, const char *source, const char *destination, std::string method_id) {
+void upload_file(std::string device_identifier, const char *application_identifier, const char *source, const char *destination, std::string method_id) {
 	afc_file_ref file_ref;
 	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
 	if (!afc_conn_p)
@@ -733,7 +822,7 @@ void upload_file(const char *device_identifier, const char *application_identifi
 
 
 
-void delete_file(const char *device_identifier, const char *application_identifier, const char *destination, std::string method_id) {
+void delete_file(std::string device_identifier, const char *application_identifier, const char *destination, std::string method_id) {
 	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
 	if (!afc_conn_p)
 	{
@@ -748,7 +837,7 @@ void delete_file(const char *device_identifier, const char *application_identifi
 	print(json({{ kResponse, "Successfully removed file" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
-std::unique_ptr<afc_file> get_afc_file(const char *device_identifier, const char *application_identifier, const char *destination, std::string method_id){
+std::unique_ptr<afc_file> get_afc_file(std::string device_identifier, const char *application_identifier, const char *destination, std::string method_id){
 	afc_file_ref file_ref;
 	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
 	if (!afc_conn_p)
@@ -765,7 +854,7 @@ std::unique_ptr<afc_file> get_afc_file(const char *device_identifier, const char
 	return result;
 }
 
-void read_file(const char *device_identifier, const char *application_identifier, const char *path, std::string method_id, const char *destination = NULL) {
+void read_file(std::string device_identifier, const char *application_identifier, const char *path, std::string method_id, const char *destination = NULL) {
 	std::unique_ptr<afc_file> file = get_afc_file(device_identifier, application_identifier, path, method_id);
 	if (!file)
 	{
@@ -838,23 +927,14 @@ void get_application_infos(std::string device_identifier, std::string method_id)
 								"</dict>"
 							"</plist>";
 
-	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command);
-	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
+	int bytes_sent = send_message(xml_command, (SOCKET)socket);
 
 	std::vector<json> livesync_app_infos;
 	while (true)
 	{
-		std::map<std::string, boost::any> dict;
-		char *buffer = new char[4];
-		int bytes_read = recv((SOCKET)socket, buffer, 4, 0);
-		unsigned long res = ntohl(*((unsigned long*)buffer));
-		free(buffer);
-		buffer = new char[res];
-		bytes_read = recv((SOCKET)socket, buffer, res, 0);
-		Plist::readPlist(buffer, res, dict);
-		free(buffer);
-		PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(dict.count("Error"), boost::any_cast<std::string>(dict["Error"]).c_str(), device_identifier, method_id);
-		if (dict.count("Status") && boost::any_cast<std::string>(dict["Status"]) == "Complete")
+		std::map<std::string, boost::any> dict = receive_message((SOCKET)socket);
+		PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id);
+		if (dict.count(kStatusKey) && boost::any_cast<std::string>(dict[kStatusKey]) == "Complete")
 		{
 			break;
 		}
@@ -919,26 +999,39 @@ std::map<std::string, std::map<std::string, std::string>> parse_lookup_cfdiction
 	return result;
 }
 
-void lookup_apps(std::string device_identifier, std::string method_id)
+bool get_all_apps(std::string device_identifier, std::map<std::string, std::map<std::string, std::string>>& map)
 {
 	CFDictionaryRef result = NULL;
 	if (!start_session(device_identifier))
 	{
 		if (AMDeviceLookupApplications(devices[device_identifier].device_info, NULL, &result))
 		{
-			print_error("Lookup applications failed", device_identifier, method_id, kApplicationsCustomError);
+			return false;
 		}
 		else
 		{
 			// The result from AMDeviceLookupApplications is actually a dictionary
 			// Very much resembling a plist
 			// It contains a lot of information about the app, but right now we only care for the properties `CFBundleExecutable` and `Path`
-			std::map<std::string, std::map<std::string, std::string>> map = parse_lookup_cfdictionary(result);
-			print(json({ { kResponse, map }, { kId, method_id }, { kDeviceId, device_identifier } }));
+			map = parse_lookup_cfdictionary(result);
 		}
 	}
 
 	stop_session(device_identifier);
+	return true;
+}
+
+void lookup_apps(std::string device_identifier, std::string method_id)
+{
+	std::map<std::string, std::map<std::string, std::string>> map;
+	if (get_all_apps(device_identifier, map))
+	{
+		print(json({ { kResponse, map }, { kId, method_id }, { kDeviceId, device_identifier } }));
+	}
+	else
+	{
+		print_error("Lookup applications failed", device_identifier, method_id, kApplicationsCustomError);
+	}
 }
 
 void device_log(std::string device_identifier, std::string method_id)
@@ -978,7 +1071,7 @@ void post_notification(std::string device_identifier, std::string notification_n
 	}
 
 	std::stringstream xml_command;
-	xml_command <<"<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+	xml_command << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
 						"<plist version=\"1.0\">"
 						"<dict>"
@@ -991,8 +1084,7 @@ void post_notification(std::string device_identifier, std::string notification_n
 						"</dict>"
 						"</plist>";
 	
-	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(xml_command.str().c_str());
-	int bytes_sent = send((SOCKET)socket, length_encoded_message.message, length_encoded_message.length, 0);
+	int bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)socket);
 	print(json({ { kResponse, "Successfully sent notification" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 }
 
@@ -1038,6 +1130,31 @@ bool validate_device_id_and_attrs(const json& j, std::string method_id, std::vec
 	return true;
 }
 
+void start_app(std::string device_identifier, std::string application_identifier, std::string ddi, std::string method_id)
+{
+	if (!devices.count(device_identifier))
+	{
+		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
+		return ;
+	}
+
+	std::map<std::string, std::map<std::string, std::string>> map;
+	if (get_all_apps(device_identifier, map))
+	{
+		if (map.count(application_identifier) == 0)
+		{
+			print_error("Application not installed", device_identifier, method_id, kApplicationsCustomError);
+			return;
+		}
+
+		mount_image(device_identifier, ddi, method_id);
+	}
+	else
+	{
+		print_error("Lookup applications failed", device_identifier, method_id, kApplicationsCustomError);
+	}
+}
+
 int main()
 {
 #ifdef _WIN32
@@ -1075,7 +1192,7 @@ int main()
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string application_identifier = arg.value(kAppId, "");
 					std::string path = arg.value(kPath, "");
-					list_files(device_identifier.c_str(), application_identifier.c_str(), path.c_str(), method_id);
+					list_files(device_identifier, application_identifier.c_str(), path.c_str(), method_id);
 				}
 			}
 			else if (method_name == "upload")
@@ -1089,7 +1206,7 @@ int main()
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string source = arg.value(kSource, "");
 					std::string destination = arg.value(kDestination, "");
-					upload_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), destination.c_str(), method_id);
+					upload_file(device_identifier, application_identifier.c_str(), source.c_str(), destination.c_str(), method_id);
 				}
 			}
 			else if (method_name == "delete")
@@ -1102,7 +1219,7 @@ int main()
 					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string destination = arg.value(kDestination, "");
-					delete_file(device_identifier.c_str(), application_identifier.c_str(), destination.c_str(), method_id);
+					delete_file(device_identifier, application_identifier.c_str(), destination.c_str(), method_id);
 				}
 			}
 			else if (method_name == "read")
@@ -1115,7 +1232,7 @@ int main()
 					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string path = arg.value(kPath, "");
-					read_file(device_identifier.c_str(), application_identifier.c_str(), path.c_str(), method_id);
+					read_file(device_identifier, application_identifier.c_str(), path.c_str(), method_id);
 				}
 			}
 			else if (method_name == "download")
@@ -1129,7 +1246,7 @@ int main()
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string source = arg.value(kSource, "");
 					std::string destination = arg.value(kDestination, "");
-					read_file(device_identifier.c_str(), application_identifier.c_str(), source.c_str(), method_id, destination.c_str());
+					read_file(device_identifier, application_identifier.c_str(), source.c_str(), method_id, destination.c_str());
 				}
 			}
 			else if (method_name == "apps")
@@ -1155,14 +1272,20 @@ int main()
 
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string notification_name = arg.value(kNotificationName, "");
-					post_notification(device_identifier.c_str(), notification_name.c_str(), method_id);
+					post_notification(device_identifier, notification_name, method_id);
 				}
 			}
-			else if (method_name == "lookup")
+			else if (method_name == "start")
 			{
-				for (json &device_identifier_json : method_args) {
-					std::string device_identifier = device_identifier_json.get<std::string>();
-					perform_detached_operation(lookup_apps, device_identifier, method_id);
+				for (json &arg : method_args)
+				{
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDeviceId, kDeveloperDiskImage }))
+						continue;
+
+					std::string application_identifier = arg.value(kAppId, "");
+					std::string device_identifier = arg.value(kDeviceId, "");
+					std::string ddi = arg.value(kDeveloperDiskImage, "");
+					start_app(device_identifier, application_identifier, ddi, method_id);
 				}
 			}
 			else if (method_name == "exit")

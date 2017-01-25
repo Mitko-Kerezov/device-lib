@@ -30,6 +30,9 @@
     <ClCompile Include="PlistCpp\PlistDate.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FileHelper.cpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PlistCpp\base64.hpp">
@@ -840,6 +843,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PlistCpp\include\boost\version.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FileHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
