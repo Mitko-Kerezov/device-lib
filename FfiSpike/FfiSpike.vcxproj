@@ -162,14 +162,17 @@
   <ItemGroup>
     <ClCompile Include="FfiSpike.cpp" />
     <ClCompile Include="FileHelper.cpp" />
+    <ClCompile Include="GDBHelper.cpp" />
     <ClCompile Include="json.hpp" />
     <ClCompile Include="PlistCpp\Plist.cpp" />
     <ClCompile Include="PlistCpp\PlistDate.cpp" />
     <ClCompile Include="PlistCpp\pugixml.cpp" />
     <ClCompile Include="SocketHelper.cpp" />
+    <ClCompile Include="StringHelper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FileHelper.h" />
+    <ClInclude Include="GDBHelper.h" />
     <ClInclude Include="PlistCpp\base64.hpp" />
     <ClInclude Include="PlistCpp\include\boost\any.hpp" />
     <ClInclude Include="PlistCpp\include\boost\config.hpp" />
@@ -441,6 +444,7 @@
     <ClInclude Include="PlistCpp\pugiconfig.hpp" />
     <ClInclude Include="PlistCpp\pugixml.hpp" />
     <ClInclude Include="SocketHelper.h" />
+    <ClInclude Include="StringHelper.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

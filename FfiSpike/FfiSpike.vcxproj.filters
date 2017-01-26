@@ -36,6 +36,12 @@
     <ClCompile Include="SocketHelper.cpp">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="StringHelper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GDBHelper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PlistCpp\base64.hpp">
@@ -852,6 +858,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SocketHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="StringHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GDBHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

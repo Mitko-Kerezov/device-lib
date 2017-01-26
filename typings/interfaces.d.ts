@@ -84,7 +84,7 @@ declare module IOSDeviceLib {
 		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse>[];
 		notify(notifyArray: INotifyData[]): Promise<IDeviceResponse>[];
 		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
-		lookup(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
+		start(startArray: IAppDevice[]): Promise<IDeviceResponse>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
 		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): NodeJS.EventEmitter;

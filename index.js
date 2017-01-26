@@ -25,7 +25,7 @@ const MethodNames = {
 	read: "read",
 	delete: "delete",
 	notify: "notify",
-	lookup: "lookup",
+	start: "start",
 	apps: "apps",
 };
 
@@ -90,8 +90,8 @@ class IOSDeviceLib extends EventEmitter {
 		return deviceIdentifiers.map(di => this._getPromise(MethodNames.apps, [di]));
 	}
 
-	lookup(deviceIdentifiers) {
-		return deviceIdentifiers.map(di => this._getPromise(MethodNames.lookup, [di]));
+	start(startArray) {
+		return startArray.map(startObject => this._getPromise(MethodNames.start, [startObject]));
 	}
 
 	startDeviceLog(deviceIdentifiers) {

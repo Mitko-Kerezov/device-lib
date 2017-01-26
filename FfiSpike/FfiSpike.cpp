@@ -23,6 +23,7 @@
 #include "FileHelper.h"
 #include "SocketHelper.h"
 #include "Declarations.h"
+#include "GDBHelper.h"
 
 #ifndef _WIN32
 #include <sys/socket.h>
@@ -633,69 +634,14 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 	}
 }
 
-#ifdef _WIN32
 bool mount_image(std::string device_identifier, std::string image_path, std::string method_id)
 {
-	std::string image_signature_path = image_path + ".signature";
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(!exists(image_signature_path), "Could not find developer disk image signature", device_identifier, method_id, false);
+	#ifdef _WIN32
+	return true;
+	#else
 
-	HANDLE mountFd = start_service(device_identifier, kMobileImageMounter, method_id);
-	if (!mountFd)
-	{
-		return false;
-	}
-
-	FileInfo image_file_info = get_file_info(image_path, false);
-	FileInfo signature_file_info = get_file_info(image_signature_path, true);
-	std::string signature_base64 = base64_encode(&signature_file_info.contents[0], signature_file_info.size);
-	std::stringstream xml_command;
-	xml_command << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-		"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
-		"<plist version=\"1.0\">"
-			"<dict>"
-				"<key>Command</key>"
-				"<string>ReceiveBytes</string>"
-				"<key>ImageSize</key>"
-				"<integer>" + std::to_string(image_file_info.size) + "</integer>"
-				"<key>ImageType</key>"
-				"<string>Developer</string>"
-				"<key>ImageSignature</key>"
-				"<data>" + signature_base64 + "</data>"
-			"</dict>"
-		"</plist>";
-
-	int bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
-	std::map<std::string, boost::any> dict = receive_message((SOCKET)mountFd);
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
-	if (boost::any_cast<std::string>(dict[kStatusKey]) == "ReceiveBytesAck")
-	{
-		image_file_info = get_file_info(image_path, true);
-		int bytes_sent = send_message(&image_file_info.contents[0], (SOCKET)mountFd, image_file_info.size);
-		xml_command << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-			"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
-			"<plist version=\"1.0\">"
-				"<dict>"
-					"<key>Command</key>"
-					"<string>MountImage</string>"
-					"<key>ImageType</key>"
-					"<string>Developer</string>"
-					"<key>ImageSignature</key>"
-					"<data>" + signature_base64 + "</data>"
-					"<key>ImagePath</key>"
-					"<string>/var/mobile/Media/PublicStaging/staging.dimage</string>"
-				"</dict>"
-			"</plist>";
-		std::map<std::string, boost::any> answer = receive_message((SOCKET)mountFd);
-		PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(answer.count(kErrorKey), boost::any_cast<std::string>(answer[kErrorKey]).c_str(), device_identifier, method_id, false);
-
-	}
-	else
-	{
-		// This has not been tested!
-		int a = 5;
-	}
+	#endif // _WIN32
 }
-#endif // _WIN32
 
 void list_files(std:: string device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
 {
@@ -1091,10 +1037,42 @@ bool validate_device_id_and_attrs(const json& j, std::string method_id, std::vec
 
 	std::string device_identifier = j.value(kDeviceId, "");
 
-	if (!validate(j, attrs, device_identifier, method_id))
+	if (!validate(j, attrs, method_id, device_identifier))
 		return false;
 
 	return true;
+}
+
+void stop_app(std::string device_identifier, std::string application_identifier, std::string ddi, std::string method_id)
+{
+	if (!devices.count(device_identifier))
+	{
+		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
+		return;
+	}
+
+	std::map<std::string, std::map<std::string, std::string>> map;
+	if (get_all_apps(device_identifier, map))
+	{
+		if (map.count(application_identifier) == 0)
+		{
+			print_error("Application not installed", device_identifier, method_id, kApplicationsCustomError);
+			return;
+		}
+
+		HANDLE gdb = start_service(device_identifier, kDebugServer, method_id);
+		if (!gdb)
+		{
+			return;
+		}
+
+		std::string executable = map[application_identifier]["Path"] + "/" + map[application_identifier]["CFBundleExecutable"];
+		stop_application(map[application_identifier]["Path"], (SOCKET)gdb);
+	}
+	else
+	{
+		print_error("Lookup applications failed", device_identifier, method_id, kApplicationsCustomError);
+	}
 }
 
 void start_app(std::string device_identifier, std::string application_identifier, std::string ddi, std::string method_id)
@@ -1117,8 +1095,14 @@ void start_app(std::string device_identifier, std::string application_identifier
 		if (mount_image(device_identifier, ddi, method_id))
 		{
 			HANDLE gdb = start_service(device_identifier, kDebugServer, method_id);
-			std::string executable = map[application_identifier]["Path"] + map[application_identifier]["CFBundleExecutable"];
-			int a = -5;
+			if (!gdb)
+			{
+				return;
+			}
+
+			std::string executable = map[application_identifier]["Path"] + "/" + map[application_identifier]["CFBundleExecutable"];
+			run_application(executable, (SOCKET)gdb);
+			print(json({ { kResponse, "Successfully started application" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 		}
 	}
 	else
@@ -1258,6 +1242,19 @@ int main()
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string ddi = arg.value(kDeveloperDiskImage, "");
 					start_app(device_identifier, application_identifier, ddi, method_id);
+				}
+			}
+			else if (method_name == "stop")
+			{
+				for (json &arg : method_args)
+				{
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDeviceId, kDeveloperDiskImage }))
+						continue;
+
+					std::string application_identifier = arg.value(kAppId, "");
+					std::string device_identifier = arg.value(kDeviceId, "");
+					std::string ddi = arg.value(kDeveloperDiskImage, "");
+					stop_app(device_identifier, application_identifier, ddi, method_id);
 				}
 			}
 			else if (method_name == "exit")
