@@ -38,6 +38,10 @@ declare module IOSDeviceLib {
 	interface IDeleteFileData extends IAppDevice, IDestination {
 	}
 
+	interface IStartApplicationData extends IAppDevice {
+		ddi: string;
+	}
+
 	interface INotifyData extends IDeviceId {
 		notificationName: string;
 	}
@@ -84,7 +88,7 @@ declare module IOSDeviceLib {
 		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse>[];
 		notify(notifyArray: INotifyData[]): Promise<IDeviceResponse>[];
 		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
-		start(startArray: IAppDevice[]): Promise<IDeviceResponse>[];
+		start(startArray: IStartApplicationData[]): Promise<IDeviceResponse>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
 		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): NodeJS.EventEmitter;

@@ -1329,7 +1329,7 @@ int main()
 			{
 				for (json &arg : method_args)
 				{
-					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDeviceId, kDeveloperDiskImage }))
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDeviceId }))
 						continue;
 
 					std::string application_identifier = arg.value(kAppId, "");
