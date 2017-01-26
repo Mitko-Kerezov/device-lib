@@ -33,6 +33,7 @@
 const unsigned kArgumentError = 3;
 const unsigned kAFCCustomError = 4;
 const unsigned kApplicationsCustomError = 5;
+const unsigned kUnexpectedError = 13;
 
 const unsigned kADNCIMessageConnected = 1;
 const unsigned kADNCIMessageDisconnected = 2;
@@ -76,6 +77,7 @@ const char *kErrorKey = "Error";
 const char *kStatusKey = "Status";
 const char *kResponse = "response";
 const char *kMessage = "message";
+const char *kComplete = "Complete";
 const char *kCode = "code";
 const int kAFCFileModeRead = 2;
 const int kAFCFileModeWrite = 3;
@@ -92,6 +94,7 @@ const std::string file_prefix("file:///");
 #define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
 #define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id, value) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return value; }
 #define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
+
 
 using json = nlohmann::json;
 
@@ -267,6 +270,11 @@ void get_device_properties(std::string device_identifier, json &result)
 	result["deviceColor"] = get_device_property_value(device_identifier, "DeviceColor");
 }
 
+inline bool has_complete_status(std::map<std::string, boost::any>& dict)
+{
+	return boost::any_cast<std::string>(dict[kStatusKey]) == kComplete;
+}
+
 void device_notification_callback(const DevicePointer* device_ptr)
 {
 	std::string device_identifier = get_cstring_from_cfstring(AMDeviceCopyDeviceIdentifier(device_ptr->device_info));
@@ -392,11 +400,12 @@ void start_run_loop()
 	CFRunLoopRun();
 }
 
-HANDLE start_service(std::string device_identifier, const char* service_name, std::string method_id)
+HANDLE start_service(std::string device_identifier, const char* service_name, std::string method_id, bool should_log_error = true)
 {
 	if (!devices.count(device_identifier))
 	{
-		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
+		if (should_log_error)
+			print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
 		return NULL;
 	}
 
@@ -415,12 +424,85 @@ HANDLE start_service(std::string device_identifier, const char* service_name, st
 	{
 		std::string message("Could not start service ");
 		message += service_name;
-		print_error(message.c_str(), device_identifier, method_id, result);
+		if (should_log_error)
+			print_error(message.c_str(), device_identifier, method_id, result);
 		return NULL;
 	}
 	devices[device_identifier].services[service_name] = socket;
 
 	return socket;
+}
+
+bool mount_image(std::string device_identifier, std::string image_path, std::string method_id)
+{
+#ifdef _WIN32
+	std::string image_signature_path = image_path + ".signature";
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(!exists(image_signature_path), "Could not find developer disk image signature", device_identifier, method_id, false);
+
+	HANDLE mountFd = start_service(device_identifier, kMobileImageMounter, method_id);
+	if (!mountFd)
+	{
+		return false;
+	}
+
+	FileInfo image_file_info = get_file_info(image_path, false);
+	FileInfo signature_file_info = get_file_info(image_signature_path, true);
+	std::string signature_base64 = base64_encode(&signature_file_info.contents[0], signature_file_info.size);
+	
+	std::stringstream xml_command;
+	int bytes_sent;
+	std::map<std::string, boost::any> dict;
+	xml_command <<  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+					"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+					"<plist version=\"1.0\">"
+					"<dict>"
+						"<key>Command</key>"
+						"<string>ReceiveBytes</string>"
+						"<key>ImageSize</key>"
+						"<integer>" + std::to_string(image_file_info.size) + "</integer>"
+						"<key>ImageType</key>"
+						"<string>Developer</string>"
+						"<key>ImageSignature</key>"
+						"<data>" + signature_base64 + "</data>"
+					"</dict>"
+					"</plist>";
+
+	bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
+	dict = receive_message((SOCKET)mountFd);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
+	if (boost::any_cast<std::string>(dict[kStatusKey]) == "ReceiveBytesAck")
+	{
+		image_file_info = get_file_info(image_path, true);
+		bytes_sent = send((SOCKET)mountFd, &image_file_info.contents[0], image_file_info.size, 0);
+		dict = receive_message((SOCKET)mountFd);
+		xml_command.str("");
+		xml_command <<  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+						"<plist version=\"1.0\">"
+						"<dict>"
+							"<key>Command</key>"
+							"<string>MountImage</string>"
+							"<key>ImageType</key>"
+							"<string>Developer</string>"
+							"<key>ImageSignature</key>"
+							"<data>" + signature_base64 + "</data>"
+							"<key>ImagePath</key>"
+							"<string>/var/mobile/Media/PublicStaging/staging.dimage</string>"
+						"</dict>"
+						"</plist>";
+		bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
+		dict = receive_message((SOCKET)mountFd);
+		PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
+		return dict.count(kStatusKey) && has_complete_status(dict);
+	}
+	else
+	{
+		print_error("Could not transfer disk image", device_identifier, method_id, kUnexpectedError);
+		return false;
+	}
+#else
+
+#endif // _WIN32
 }
 
 HANDLE start_house_arrest(std::string device_identifier, const char* application_identifier, std::string method_id)
@@ -453,6 +535,17 @@ HANDLE start_house_arrest(std::string device_identifier, const char* application
 
 	devices[device_identifier].services[kHouseArrest] = houseFd;
 	return houseFd;
+}
+
+HANDLE start_debug_server(std::string device_identifier, std::string ddi, std::string method_id)
+{
+	HANDLE gdb = start_service(device_identifier, kDebugServer, method_id, false);
+	if (!gdb && mount_image(device_identifier, ddi, method_id))
+	{
+		gdb = start_service(device_identifier, kDebugServer, method_id);
+	}
+
+	return gdb;
 }
 
 afc_connection *get_afc_connection(std::string device_identifier, const char* application_identifier, std::string method_id)
@@ -634,15 +727,6 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 	}
 }
 
-bool mount_image(std::string device_identifier, std::string image_path, std::string method_id)
-{
-	#ifdef _WIN32
-	return true;
-	#else
-
-	#endif // _WIN32
-}
-
 void list_files(std:: string device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
 {
 	HANDLE houseFd = start_house_arrest(device_identifier, application_identifier, method_id);
@@ -715,13 +799,13 @@ void upload_file(std::string device_identifier, const char *application_identifi
 			AFCRemovePath(afc_conn_p, destination);
 			error_message << "Could not open file " << destination << " for writing";
 			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeWrite, &file_ref), error_message.str().c_str(), device_identifier, method_id);
-			error_message.str(std::string());
+			error_message.str("");
 			error_message << "Could not write to file: " << destination;
 			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefWrite(afc_conn_p, file_ref, &file_content[0], file_content.size()), error_message.str().c_str(), device_identifier, method_id);
-			error_message.str(std::string());
+			error_message.str("");
 			error_message << "Could not close file reference: " << destination;
 			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(afc_conn_p, file_ref), error_message.str().c_str(), device_identifier, method_id);
-			error_message.str(std::string());
+			error_message.str("");
 			print(json({{ kResponse, "Successfully uploaded file" },{ kId, method_id },{ kDeviceId, device_identifier }}));
 		}
 	}
@@ -847,7 +931,7 @@ void get_application_infos(std::string device_identifier, std::string method_id)
 	{
 		std::map<std::string, boost::any> dict = receive_message((SOCKET)socket);
 		PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id);
-		if (dict.count(kStatusKey) && boost::any_cast<std::string>(dict[kStatusKey]) == "Complete")
+		if (dict.count(kStatusKey) && has_complete_status(dict))
 		{
 			break;
 		}
@@ -1092,18 +1176,15 @@ void start_app(std::string device_identifier, std::string application_identifier
 			return;
 		}
 
-		if (mount_image(device_identifier, ddi, method_id))
+		HANDLE gdb = start_debug_server(device_identifier, ddi, method_id);
+		if (!gdb)
 		{
-			HANDLE gdb = start_service(device_identifier, kDebugServer, method_id);
-			if (!gdb)
-			{
-				return;
-			}
-
-			std::string executable = map[application_identifier]["Path"] + "/" + map[application_identifier]["CFBundleExecutable"];
-			run_application(executable, (SOCKET)gdb);
-			print(json({ { kResponse, "Successfully started application" },{ kId, method_id },{ kDeviceId, device_identifier } }));
+			return;
 		}
+
+		std::string executable = map[application_identifier]["Path"] + "/" + map[application_identifier]["CFBundleExecutable"];
+		run_application(executable, (SOCKET)gdb);
+		print(json({ { kResponse, "Successfully started application" },{ kId, method_id },{ kDeviceId, device_identifier } }));
 	}
 	else
 	{
@@ -1235,7 +1316,7 @@ int main()
 			{
 				for (json &arg : method_args)
 				{
-					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDeviceId, kDeveloperDiskImage }))
+					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kDeviceId }))
 						continue;
 
 					std::string application_identifier = arg.value(kAppId, "");
