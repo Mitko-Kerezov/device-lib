@@ -12,3 +12,9 @@ std::string to_hex(const std::string & s)
 
 	return ret.str();
 }
+
+bool contains(const std::string& text, const std::string& search_string, int start_position)
+{
+	std::string::size_type index_of_documents = text.find(search_string, start_position);
+	return index_of_documents != std::string::npos;
+}
