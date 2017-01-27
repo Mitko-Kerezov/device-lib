@@ -86,8 +86,10 @@ const char kUnixPathSeparator = '/';
 const char *kEventString = "event";
 const char *kRefreshAppMessage = "com.telerik.app.refreshApp";
 
-const std::string file_prefix("file:///");
-
+const std::string kFilePrefix("file:///");
+const std::string kDocumentsFolder("/Documents/");
+const std::string kVendDocumentsCommandName("VendDocuments");
+const std::string kVendContainerCommandName("VendContainer");
 
 #pragma endregion Constants
 
@@ -548,21 +550,52 @@ HANDLE start_debug_server(std::string device_identifier, std::string ddi, std::s
 	return gdb;
 }
 
-afc_connection *get_afc_connection(std::string device_identifier, const char* application_identifier, std::string method_id)
+bool start_afc_client(std::string& device_identifier, std::string& root_path, const char* application_identifier, HANDLE house_arrest_fd, std::string& method_id)
+{
+	std::string command_name = kVendDocumentsCommandName;
+	std::string::size_type index_of_documents = root_path.find(kDocumentsFolder, 0);
+	if (index_of_documents == std::string::npos)
+	{
+		command_name = kVendContainerCommandName;
+	}
+
+	std::stringstream xml_command;
+	xml_command << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+		"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+		"<plist version=\"1.0\">"
+		"<dict>"
+		"<key>Command</key>"
+		"<string>" + command_name + "</string>"
+		"<key>Identifier</key>"
+		"<string>" + std::string(application_identifier) + "</string>"
+		"</dict>"
+		"</plist>";
+
+	HANDLE result_fd = NULL;
+
+	int bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)house_arrest_fd);
+	std::map<std::string, boost::any> dict = receive_message((SOCKET)house_arrest_fd);
+
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
+
+	return true;
+}
+
+afc_connection *get_afc_connection(std::string& device_identifier, const char* application_identifier, std::string& root_path, std::string& method_id)
 {
 	if (devices.count(device_identifier) && devices[device_identifier].afc_conn_p)
 	{
 		return devices[device_identifier].afc_conn_p;
 	}
 
-	HANDLE houseFd = start_house_arrest(device_identifier, application_identifier, method_id);
-	if (!houseFd)
+	HANDLE house_fd = start_service(device_identifier, kHouseArrest, method_id);
+	if (!house_fd || !start_afc_client(device_identifier, root_path, application_identifier, house_fd, method_id))
 	{
 		return NULL;
 	}
 
 	afc_connection* afc_conn_p = NULL;
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCConnectionOpen(houseFd, 0, &afc_conn_p), "Could not open afc connection", device_identifier, method_id, NULL);
+	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCConnectionOpen(house_fd, 0, &afc_conn_p), "Could not open afc connection", device_identifier, method_id, NULL);
 	devices[device_identifier].afc_conn_p = afc_conn_p;
 	return afc_conn_p;
 }
@@ -606,9 +639,9 @@ void install_application(std::string install_path, std::string device_identifier
 	}
 
 #ifdef _WIN32
-	if (install_path.compare(0, file_prefix.size(), file_prefix))
+	if (install_path.compare(0, kFilePrefix.size(), kFilePrefix))
 	{
-		install_path = file_prefix + install_path;
+		install_path = kFilePrefix + install_path;
 	}
 	windows_path_to_unix(install_path);
 #endif
@@ -777,7 +810,8 @@ bool ensure_device_path_exists(std::string &device_path, afc_connection *connect
 
 void upload_file(std::string device_identifier, const char *application_identifier, const char *source, const char *destination, std::string method_id) {
 	afc_file_ref file_ref;
-	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
+	std::string destination_str =  windows_path_to_unix(destination);
+	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, destination_str, method_id);
 	if (!afc_conn_p)
 	{
 		return;
@@ -790,7 +824,6 @@ void upload_file(std::string device_identifier, const char *application_identifi
 	std::vector<char> file_content(size);
 	if (file.read(file_content.data(), size))
 	{
-		std::string destination_str =  windows_path_to_unix(destination);
 		destination = destination_str.c_str();
 		std::string dir_name = get_dirname(destination);
 		if (ensure_device_path_exists(dir_name, afc_conn_p, method_id, device_identifier))
@@ -817,16 +850,14 @@ void upload_file(std::string device_identifier, const char *application_identifi
 	}
 }
 
-
-
 void delete_file(std::string device_identifier, const char *application_identifier, const char *destination, std::string method_id) {
-	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
+	std::string destination_str = windows_path_to_unix(destination);
+	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, destination_str, method_id);
 	if (!afc_conn_p)
 	{
 		return;
 	}
 
-	std::string destination_str = windows_path_to_unix(destination);
 	destination = destination_str.c_str();
 	std::stringstream error_message;
 	error_message << "Could not remove file " << destination;
@@ -836,13 +867,13 @@ void delete_file(std::string device_identifier, const char *application_identifi
 
 std::unique_ptr<afc_file> get_afc_file(std::string device_identifier, const char *application_identifier, const char *destination, std::string method_id){
 	afc_file_ref file_ref;
-	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, method_id);
+	std::string destination_str = windows_path_to_unix(destination);
+	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, destination_str, method_id);
 	if (!afc_conn_p)
 	{
 		return NULL;
 	}
 
-	std::string destination_str = windows_path_to_unix(destination);
 	destination = destination_str.c_str();
 	std::stringstream error_message;
 	error_message << "Could not open file " << destination << " for reading";
