@@ -22,6 +22,7 @@
 #include "PlistCpp/include/boost/any.hpp"
 #include "FileHelper.h"
 #include "SocketHelper.h"
+#include "StringHelper.h"
 #include "Declarations.h"
 #include "GDBHelper.h"
 
@@ -550,11 +551,10 @@ HANDLE start_debug_server(std::string device_identifier, std::string ddi, std::s
 	return gdb;
 }
 
-bool start_afc_client(std::string& device_identifier, std::string& root_path, const char* application_identifier, HANDLE house_arrest_fd, std::string& method_id)
+bool start_afc_client(std::string& device_identifier, std::string& destination, const char* application_identifier, HANDLE house_arrest_fd, std::string& method_id)
 {
 	std::string command_name = kVendDocumentsCommandName;
-	std::string::size_type index_of_documents = root_path.find(kDocumentsFolder, 0);
-	if (index_of_documents == std::string::npos)
+	if (!contains(destination, kDocumentsFolder))
 	{
 		command_name = kVendContainerCommandName;
 	}
@@ -570,9 +570,7 @@ bool start_afc_client(std::string& device_identifier, std::string& root_path, co
 		"<string>" + std::string(application_identifier) + "</string>"
 		"</dict>"
 		"</plist>";
-
-	HANDLE result_fd = NULL;
-
+	
 	int bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)house_arrest_fd);
 	std::map<std::string, boost::any> dict = receive_message((SOCKET)house_arrest_fd);
 
