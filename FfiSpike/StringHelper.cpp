@@ -18,3 +18,8 @@ bool contains(const std::string& text, const std::string& search_string, int sta
 	std::string::size_type index_of_documents = text.find(search_string, start_position);
 	return index_of_documents != std::string::npos;
 }
+
+bool starts_with(const std::string& str, const std::string& prefix)
+{
+	return !str.compare(0, prefix.size(), prefix);
+}
