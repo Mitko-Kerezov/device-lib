@@ -69,7 +69,7 @@ struct DeviceData {
 	DeviceInfo* device_info;
 	std::map<const char*, HANDLE> services;
 	int sessions;
-	std::map<const char*, afc_connection*> afc_connections;
+	std::map<std::string, afc_connection*> afc_connections;
 
 	//~DeviceData() {
 	//	//device_info

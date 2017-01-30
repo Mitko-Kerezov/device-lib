@@ -255,21 +255,31 @@ void erase_safe(std::map<const char*, HANDLE>& m, const char* key)
 	}
 }
 
-void cleanup_file_resources(std::string& device_identifier)
+void cleanup_file_resources(const std::string& device_identifier)
 {
-	if (devices[device_identifier].afc_connections.size() > 0)
+	if (!devices.count(device_identifier)) 
+	{
+		return;
+	}
+
+	if (devices[device_identifier].afc_connections.size())
 	{
 		for (auto const& key_value_pair : devices[device_identifier].afc_connections)
 		{
-			AFCConnectionClose(key_value_pair.second);
+			cleanup_file_resources(device_identifier, key_value_pair.first);
 		}
 
 		devices[device_identifier].afc_connections.clear();
 	}
 }
 
-void cleanup_file_resources(std::string& device_identifier, const char* application_identifier)
+void cleanup_file_resources(const std::string& device_identifier, const std::string& application_identifier)
 {
+	if (!devices.count(device_identifier))
+	{
+		return;
+	}
+
 	afc_connection* afc_connection_to_close = devices[device_identifier].afc_connections[application_identifier];
 
 	if (afc_connection_to_close)
@@ -311,7 +321,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 		{
 			if (devices.count(device_identifier))
 			{
-				if (devices[device_identifier].afc_connections.size() > 0)
+				if (devices[device_identifier].afc_connections.size())
 				{
 					cleanup_file_resources(device_identifier);
 				}
@@ -639,7 +649,7 @@ void uninstall_application(std::string application_identifier, std::string devic
 	{
 		print(json({{ kResponse, "Successfully uninstalled application" }, { kId, method_id }, { kDeviceId, device_identifier }}));
 		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
-		cleanup_file_resources(device_identifier, application_identifier.c_str());
+		cleanup_file_resources(device_identifier, application_identifier);
 	}
 }
 
