@@ -91,6 +91,6 @@ declare module IOSDeviceLib {
 		start(startArray: IStartApplicationData[]): Promise<IDeviceResponse>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
-		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): NodeJS.EventEmitter;
+		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): this;
 	}
 }
