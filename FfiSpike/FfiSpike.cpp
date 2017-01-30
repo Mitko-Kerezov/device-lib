@@ -255,12 +255,37 @@ void erase_safe(std::map<const char*, HANDLE>& m, const char* key)
 	}
 }
 
-void cleanup_file_resources(std::string device_identifier) {
-	erase_safe(devices[device_identifier].services, kAppleFileConnection);
-	erase_safe(devices[device_identifier].services, kHouseArrest);
-	if (devices[device_identifier].afc_conn_p) {
-		AFCConnectionClose(devices[device_identifier].afc_conn_p);
-		devices[device_identifier].afc_conn_p = nullptr;
+void cleanup_file_resources(const std::string& device_identifier)
+{
+	if (!devices.count(device_identifier)) 
+	{
+		return;
+	}
+
+	if (devices[device_identifier].afc_connections.size())
+	{
+		for (auto const& key_value_pair : devices[device_identifier].afc_connections)
+		{
+			cleanup_file_resources(device_identifier, key_value_pair.first);
+		}
+
+		devices[device_identifier].afc_connections.clear();
+	}
+}
+
+void cleanup_file_resources(const std::string& device_identifier, const std::string& application_identifier)
+{
+	if (!devices.count(device_identifier))
+	{
+		return;
+	}
+
+	afc_connection* afc_connection_to_close = devices[device_identifier].afc_connections[application_identifier];
+
+	if (afc_connection_to_close)
+	{
+		AFCConnectionClose(afc_connection_to_close);
+		devices[device_identifier].afc_connections.erase(application_identifier);
 	}
 }
 
@@ -296,7 +321,7 @@ void device_notification_callback(const DevicePointer* device_ptr)
 		{
 			if (devices.count(device_identifier))
 			{
-				if (devices[device_identifier].afc_conn_p)
+				if (devices[device_identifier].afc_connections.size())
 				{
 					cleanup_file_resources(device_identifier);
 				}
@@ -581,9 +606,9 @@ bool start_afc_client(std::string& device_identifier, std::string& destination, 
 
 afc_connection *get_afc_connection(std::string& device_identifier, const char* application_identifier, std::string& root_path, std::string& method_id)
 {
-	if (devices.count(device_identifier) && devices[device_identifier].afc_conn_p)
+	if (devices.count(device_identifier) && devices[device_identifier].afc_connections[application_identifier])
 	{
-		return devices[device_identifier].afc_conn_p;
+		return devices[device_identifier].afc_connections[application_identifier];
 	}
 
 	HANDLE house_fd = start_service(device_identifier, kHouseArrest, method_id);
@@ -594,7 +619,7 @@ afc_connection *get_afc_connection(std::string& device_identifier, const char* a
 
 	afc_connection* afc_conn_p = NULL;
 	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCConnectionOpen(house_fd, 0, &afc_conn_p), "Could not open afc connection", device_identifier, method_id, NULL);
-	devices[device_identifier].afc_conn_p = afc_conn_p;
+	devices[device_identifier].afc_connections[application_identifier] = afc_conn_p;
 	return afc_conn_p;
 }
 
@@ -624,7 +649,7 @@ void uninstall_application(std::string application_identifier, std::string devic
 	{
 		print(json({{ kResponse, "Successfully uninstalled application" }, { kId, method_id }, { kDeviceId, device_identifier }}));
 		// AppleFileConnection and HouseArrest deal with the files on an application so they have to be removed when uninstalling the application
-		cleanup_file_resources(device_identifier);
+		cleanup_file_resources(device_identifier, application_identifier);
 	}
 }
 
