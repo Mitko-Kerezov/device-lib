@@ -255,6 +255,22 @@ void erase_safe(std::map<const char*, HANDLE>& m, const char* key)
 	}
 }
 
+void cleanup_file_resources(const std::string& device_identifier, const std::string& application_identifier)
+{
+	if (!devices.count(device_identifier))
+	{
+		return;
+	}
+
+	afc_connection* afc_connection_to_close = devices[device_identifier].afc_connections[application_identifier];
+
+	if (afc_connection_to_close)
+	{
+		AFCConnectionClose(afc_connection_to_close);
+		devices[device_identifier].afc_connections.erase(application_identifier);
+	}
+}
+
 void cleanup_file_resources(const std::string& device_identifier)
 {
 	if (!devices.count(device_identifier)) 
@@ -270,22 +286,6 @@ void cleanup_file_resources(const std::string& device_identifier)
 		}
 
 		devices[device_identifier].afc_connections.clear();
-	}
-}
-
-void cleanup_file_resources(const std::string& device_identifier, const std::string& application_identifier)
-{
-	if (!devices.count(device_identifier))
-	{
-		return;
-	}
-
-	afc_connection* afc_connection_to_close = devices[device_identifier].afc_connections[application_identifier];
-
-	if (afc_connection_to_close)
-	{
-		AFCConnectionClose(afc_connection_to_close);
-		devices[device_identifier].afc_connections.erase(application_identifier);
 	}
 }
 
@@ -785,7 +785,7 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 
 void list_files(std:: string device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
 {
-	HANDLE houseFd = start_house_arrest(device_identifier, application_identifier, method_id);
+	HANDLE houseFd = ; // start_house_arrest(device_identifier, application_identifier, method_id);
 	if (!houseFd)
 	{
 		return;
