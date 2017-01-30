@@ -589,10 +589,10 @@ bool start_afc_client(std::string& device_identifier, std::string& destination, 
 		"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
 		"<plist version=\"1.0\">"
 		"<dict>"
-		"<key>Command</key>"
-		"<string>" + command_name + "</string>"
-		"<key>Identifier</key>"
-		"<string>" + std::string(application_identifier) + "</string>"
+			"<key>Command</key>"
+			"<string>" + command_name + "</string>"
+			"<key>Identifier</key>"
+			"<string>" + std::string(application_identifier) + "</string>"
 		"</dict>"
 		"</plist>";
 	
@@ -728,7 +728,7 @@ void perform_detached_operation(void(*operation)(std::string, std::string, std::
 		std::thread([operation, first_arg, device_identifier, method_id]() { operation(first_arg, device_identifier, method_id);  }).detach();
 }
 
-void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &files, std::stringstream &errors, std::string method_id, std::string device_identifier)
+void read_dir(afc_connection* afc_conn_p, const char* dir, json &files, std::stringstream &errors, std::string method_id, std::string device_identifier)
 {
 	char *dir_ent;
 	files.push_back(dir);
@@ -770,7 +770,7 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 		if (dir_joined[strlen(dir) - 1] != '/')
 			strcat(dir_joined, "/");
 		strcat(dir_joined, dir_ent);
-		read_dir(afcFd, afc_conn_p, dir_joined, files, errors, method_id, device_identifier);
+		read_dir(afc_conn_p, dir_joined, files, errors, method_id, device_identifier);
 		free(dir_joined);
 	}
 
@@ -785,25 +785,18 @@ void read_dir(HANDLE afcFd, afc_connection* afc_conn_p, const char* dir, json &f
 
 void list_files(std:: string device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
 {
-	HANDLE houseFd = ; // start_house_arrest(device_identifier, application_identifier, method_id);
-	if (!houseFd)
+	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, std::string(device_path), method_id);
+	if (!afc_conn_p)
 	{
+		print_error("Could not establish AFC Connection", device_identifier, method_id);
 		return;
 	}
 
-	afc_connection afc_conn;
-	afc_connection* afc_conn_p = &afc_conn;
-	unsigned afc_connection_open_result = AFCConnectionOpen(houseFd, 0, &afc_conn_p);
-	if (afc_connection_open_result)
-	{
-		print_error("Could not establish AFC Connection", device_identifier, method_id, afc_connection_open_result);
-		return;
-	}
 	json files;
 	std::stringstream errors;
 	
 	std::string device_path_str = windows_path_to_unix(device_path);
-	read_dir(houseFd, afc_conn_p, device_path_str.c_str(), files, errors, method_id, device_identifier);
+	read_dir(afc_conn_p, device_path_str.c_str(), files, errors, method_id, device_identifier);
 	if (!files.empty())
 	{
 		print(json({{ kResponse, files }, { kId, method_id }, { kDeviceId, device_identifier }}));
