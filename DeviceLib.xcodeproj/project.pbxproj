@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7024956E1E4080B8009A6EBF /* FileHelper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 702495661E4080B8009A6EBF /* FileHelper.cpp */; };
+		7024956F1E4080B8009A6EBF /* GDBHelper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 702495681E4080B8009A6EBF /* GDBHelper.cpp */; };
+		702495701E4080B8009A6EBF /* SocketHelper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7024956A1E4080B8009A6EBF /* SocketHelper.cpp */; };
+		702495711E4080B8009A6EBF /* StringHelper.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7024956C1E4080B8009A6EBF /* StringHelper.cpp */; };
 		7038C8991DEED5F500A3D335 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7038C8981DEED5F500A3D335 /* CoreFoundation.framework */; };
 		7038C89B1DEED6C300A3D335 /* MobileDevice.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7038C89A1DEED6C300A3D335 /* MobileDevice.framework */; };
 		7038CB3C1DEEDB4C00A3D335 /* FfiSpike.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7038C9F01DEEDB4C00A3D335 /* FfiSpike.cpp */; };
@@ -28,6 +32,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		702495661E4080B8009A6EBF /* FileHelper.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = FileHelper.cpp; sourceTree = "<group>"; };
+		702495671E4080B8009A6EBF /* FileHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = FileHelper.h; sourceTree = "<group>"; };
+		702495681E4080B8009A6EBF /* GDBHelper.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = GDBHelper.cpp; sourceTree = "<group>"; };
+		702495691E4080B8009A6EBF /* GDBHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GDBHelper.h; sourceTree = "<group>"; };
+		7024956A1E4080B8009A6EBF /* SocketHelper.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SocketHelper.cpp; sourceTree = "<group>"; };
+		7024956B1E4080B8009A6EBF /* SocketHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SocketHelper.h; sourceTree = "<group>"; };
+		7024956C1E4080B8009A6EBF /* StringHelper.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = StringHelper.cpp; sourceTree = "<group>"; };
+		7024956D1E4080B8009A6EBF /* StringHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StringHelper.h; sourceTree = "<group>"; };
 		7038C8981DEED5F500A3D335 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		7038C89A1DEED6C300A3D335 /* MobileDevice.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MobileDevice.framework; path = ../../../../System/Library/PrivateFrameworks/MobileDevice.framework; sourceTree = "<group>"; };
 		7038C9F01DEEDB4C00A3D335 /* FfiSpike.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = FfiSpike.cpp; sourceTree = "<group>"; };
@@ -329,6 +341,14 @@
 		7038C9EF1DEEDB4C00A3D335 /* FfiSpike */ = {
 			isa = PBXGroup;
 			children = (
+				702495661E4080B8009A6EBF /* FileHelper.cpp */,
+				702495671E4080B8009A6EBF /* FileHelper.h */,
+				702495681E4080B8009A6EBF /* GDBHelper.cpp */,
+				702495691E4080B8009A6EBF /* GDBHelper.h */,
+				7024956A1E4080B8009A6EBF /* SocketHelper.cpp */,
+				7024956B1E4080B8009A6EBF /* SocketHelper.h */,
+				7024956C1E4080B8009A6EBF /* StringHelper.cpp */,
+				7024956D1E4080B8009A6EBF /* StringHelper.h */,
 				7038C9F01DEEDB4C00A3D335 /* FfiSpike.cpp */,
 				7038C9F11DEEDB4C00A3D335 /* FfiSpike.vcxproj */,
 				7038C9F21DEEDB4C00A3D335 /* FfiSpike.vcxproj.filters */,
@@ -1119,10 +1139,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				702495711E4080B8009A6EBF /* StringHelper.cpp in Sources */,
+				7024956E1E4080B8009A6EBF /* FileHelper.cpp in Sources */,
 				7038CB3E1DEEDB4C00A3D335 /* PlistDate.cpp in Sources */,
 				7038CB3D1DEEDB4C00A3D335 /* Plist.cpp in Sources */,
+				7024956F1E4080B8009A6EBF /* GDBHelper.cpp in Sources */,
 				7038CB3F1DEEDB4C00A3D335 /* pugixml.cpp in Sources */,
 				7038CB3C1DEEDB4C00A3D335 /* FfiSpike.cpp in Sources */,
+				702495701E4080B8009A6EBF /* SocketHelper.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -5,6 +5,7 @@ typedef void* HANDLE;
 typedef unsigned long long SOCKET;
 #endif // _WIN32
 
+#include <string>
 
 #pragma region Data_Structures_Definition
 
@@ -191,6 +192,7 @@ extern "C"
 	CFStringRef AMDeviceCopyDeviceIdentifier(const DeviceInfo*);
 	CFStringRef AMDeviceCopyValue(const DeviceInfo*, CFStringRef, CFStringRef);
 	unsigned AMDeviceStartService(const DeviceInfo*, CFStringRef, HANDLE*, void*);
+    unsigned AMDeviceLookupApplications(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
 	unsigned AMDeviceUninstallApplication(HANDLE, CFStringRef, void*, void(*f)(), void*);
 	unsigned AMDeviceStartSession(const DeviceInfo*);
 	unsigned AMDeviceStopSession(const DeviceInfo*);

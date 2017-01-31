@@ -588,7 +588,7 @@ bool mount_image(std::string device_identifier, std::string image_path, std::str
 		return false;
 	}
 #else
-
+    return true;
 #endif // _WIN32
 }
 
@@ -842,9 +842,10 @@ void read_dir(afc_connection* afc_conn_p, const char* dir, json &files, std::str
 	}
 }
 
-void list_files(std:: string device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
+void list_files(std::string device_identifier, const char *application_identifier, const char *device_path, std::string method_id)
 {
-	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, std::string(device_path), method_id);
+    std::string device_root(device_path);
+    afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, device_root, method_id);
 	if (!afc_conn_p)
 	{
 		print_error("Could not establish AFC Connection", device_identifier, method_id);
@@ -1060,14 +1061,16 @@ void get_application_infos(std::string device_identifier, std::string method_id)
 std::map<std::string, std::string> parse_cfdictionary(CFDictionaryRef dict)
 {
 	std::map<std::string, std::string> result;
-	unsigned count = CFDictionaryGetCount(dict);
-	void** keys = new void*[count];
-	void** values = new void*[count];
+	long count = CFDictionaryGetCount(dict);
+	const void** keys = new const void*[count];
+	const void** values = new const void*[count];
 	CFDictionaryGetKeysAndValues(dict, keys, values);
 	for (size_t index = 0; index < count; index++)
 	{
-		void* value = values[index];
-		std::string key = get_cstring_from_cfstring(keys[index]);
+        // The casts below are necessary - Xcode's compiler doesn't cope without them
+        CFStringRef value = (CFStringRef)values[index];
+        CFStringRef key_str = (CFStringRef)keys[index];
+		std::string key = get_cstring_from_cfstring(key_str);
 		if (CFGetTypeID(value) == CFStringGetTypeID())
 		{
 			result[key] = get_cstring_from_cfstring(value);
@@ -1086,14 +1089,16 @@ std::map<std::string, std::map<std::string, std::string>> parse_lookup_cfdiction
 	// However those are filtered out
 	// In the future if we ever need more information about applications this would be a perfect place to look
 	std::map<std::string, std::map<std::string, std::string>> result;
-	unsigned count = CFDictionaryGetCount(dict);
-	void** keys = new void*[count];
-	void** values = new void*[count];
+	long count = CFDictionaryGetCount(dict);
+	const void** keys = new const void*[count];
+	const void** values = new const void*[count];
 	CFDictionaryGetKeysAndValues(dict, keys, values);
 	for (size_t index = 0; index < count; index++)
 	{
-		std::string key = get_cstring_from_cfstring(keys[index]);
-		result[key] = parse_cfdictionary(values[index]);
+        CFStringRef key_str = (CFStringRef)keys[index];
+        CFDictionaryRef value_dict = (CFDictionaryRef)values[index];
+        std::string key = get_cstring_from_cfstring(key_str);
+		result[key] = parse_cfdictionary(value_dict);
 	}
 
 	delete[] keys;

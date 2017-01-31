@@ -16,6 +16,7 @@
 
 #include <map>
 #include "PlistCpp/include/boost/any.hpp"
+#include "Declarations.h"
 
 struct LengthEncodedMessage {
 	char *message;

@@ -1,6 +1,10 @@
 #include "FileHelper.h"
 #include <fstream>
 
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
+
 static const std::string base64_chars =
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 			"abcdefghijklmnopqrstuvwxyz"
