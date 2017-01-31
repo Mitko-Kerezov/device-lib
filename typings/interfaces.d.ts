@@ -38,7 +38,7 @@ declare module IOSDeviceLib {
 	interface IDeleteFileData extends IAppDevice, IDestination {
 	}
 
-	interface IStartApplicationData extends IAppDevice {
+	interface IDdiApplicationData extends IAppDevice {
 		ddi: string;
 	}
 
@@ -88,7 +88,8 @@ declare module IOSDeviceLib {
 		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse>[];
 		notify(notifyArray: INotifyData[]): Promise<IDeviceResponse>[];
 		apps(deviceIdentifiers: string[]): Promise<IDeviceAppInfo>[];
-		start(startArray: IStartApplicationData[]): Promise<IDeviceResponse>[];
+		start(startArray: IDdiApplicationData[]): Promise<IDeviceResponse>[];
+		stop(stopArray: IDdiApplicationData[]): Promise<IDeviceResponse>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
 		dispose(signal?: string): void;
 		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): this;

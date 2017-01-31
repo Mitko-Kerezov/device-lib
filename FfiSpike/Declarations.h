@@ -65,11 +65,16 @@ struct afc_file {
 	afc_connection* afc_conn_p;
 };
 
+struct ApplicationCache {
+	afc_connection* afc_connection;
+	bool has_initialized_gdb;
+};
+
 struct DeviceData {
 	DeviceInfo* device_info;
 	std::map<const char*, HANDLE> services;
 	int sessions;
-	std::map<std::string, afc_connection*> afc_connections;
+	std::map<std::string, ApplicationCache> apps_cache;
 
 	//~DeviceData() {
 	//	//device_info
@@ -123,58 +128,6 @@ typedef unsigned(__cdecl *device_lookup_applications)(const DeviceInfo*, CFDicti
 
 #endif // _WIN32
 #pragma endregion Dll_Type_Definitions
-
-#pragma region Dll_Variable_Definitions
-
-#ifdef _WIN32
-device_notification_subscribe_ptr __AMDeviceNotificationSubscribe;
-HINSTANCE mobile_device_dll;
-HINSTANCE core_foundation_dll;
-
-device_copy_device_identifier __AMDeviceCopyDeviceIdentifier;
-device_copy_value __AMDeviceCopyValue;
-device_start_service __AMDeviceStartService;
-device_uninstall_application __AMDeviceUninstallApplication;
-device_connection_operation __AMDeviceStartSession;
-device_connection_operation __AMDeviceStopSession;
-device_connection_operation __AMDeviceConnect;
-device_connection_operation __AMDeviceDisconnect;
-device_connection_operation __AMDeviceIsPaired;
-device_connection_operation __AMDevicePair;
-device_connection_operation __AMDeviceValidatePairing;
-device_secure_operation_with_path __AMDeviceSecureTransferPath;
-device_secure_operation_with_path __AMDeviceSecureInstallApplication;
-device_start_house_arrest __AMDeviceStartHouseArrestService;
-device_lookup_applications __AMDeviceLookupApplications;
-
-cfstring_get_c_string_ptr __CFStringGetCStringPtr;
-cfstring_get_c_string __CFStringGetCString;
-cf_get_type_id __CFGetTypeID;
-cf_get_concrete_type_id __CFStringGetTypeID;
-cf_get_concrete_type_id __CFDictionaryGetTypeID;
-cfdictionary_get_count __CFDictionaryGetCount;
-cfdictionary_get_keys_and_values __CFDictionaryGetKeysAndValues;
-cfstring_create_with_cstring __CFStringCreateWithCString;
-cfurl_create_with_string __CFURLCreateWithString;
-cfdictionary_create __CFDictionaryCreate;
-cfrelease __CFRelease;
-
-afc_connection_open __AFCConnectionOpen;
-afc_connection_close __AFCConnectionClose;
-afc_file_info_open __AFCFileInfoOpen;
-afc_directory_read __AFCDirectoryRead;
-afc_directory_open __AFCDirectoryOpen;
-afc_directory_close __AFCDirectoryClose;
-afc_directory_create __AFCDirectoryCreate;
-afc_remove_path __AFCRemovePath;
-afc_fileref_open __AFCFileRefOpen;
-afc_fileref_read __AFCFileRefRead;
-afc_get_device_info_key __AFCGetDeviceInfoKey;
-afc_fileref_write __AFCFileRefWrite;
-afc_fileref_close __AFCFileRefClose;
-#endif // _WIN32
-
-#pragma endregion Dll_Variable_Definitions
 
 #pragma region Dll_Method_Definitions
 

@@ -30,6 +30,22 @@ std::map<std::string, boost::any> receive_message(SOCKET socket)
 	return dict;
 }
 
+std::string receive_message_raw(SOCKET socket, int size)
+{
+	int bytes_read;
+	std::string result = "";
+	do
+	{
+		char *buffer = new char[size];
+		bytes_read = recv(socket, buffer, size, 0);
+		if (bytes_read > 0)
+			result += std::string(buffer, bytes_read);
+		delete[] buffer;
+	} while (bytes_read == size);
+
+	return result;
+}
+
 LengthEncodedMessage get_message_with_encoded_length(const char* message, long long length)
 {
 	if (length < 0)
