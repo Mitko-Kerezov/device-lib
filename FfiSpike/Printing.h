@@ -16,3 +16,11 @@ void print_error(const char *message, std::string device_identifier, std::string
 	kAMDNotFoundError
 #endif
 );
+
+void print_errors(std::vector<std::string>& messages, std::string device_identifier, std::string method_id, int code =
+#ifdef _WIN32
+	GetLastError()
+#else
+	kAMDNotFoundError
+#endif
+);
