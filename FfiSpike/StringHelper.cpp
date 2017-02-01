@@ -23,3 +23,10 @@ bool starts_with(const std::string& str, const std::string& prefix)
 {
 	return !str.compare(0, prefix.size(), prefix);
 }
+
+std::string trim_end(std::string &str)
+{
+    str.erase(std::find_if(str.rbegin(), str.rend(),
+                         std::not1(std::ptr_fun<int, int>(std::isspace))).base(), str.end());
+    return str;
+}
