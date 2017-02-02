@@ -6,15 +6,6 @@
 #include <memory>
 #include <thread>
 #include <sys/stat.h>
-#ifdef _WIN32
-#include <io.h>
-#include <fcntl.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#pragma comment(lib, "Ws2_32.lib")
-
-#endif
 
 #include "json.hpp"
 #include "PlistCpp/Plist.hpp"
@@ -25,89 +16,17 @@
 #include "StringHelper.h"
 #include "Declarations.h"
 #include "GDBHelper.h"
-#include "dirent.h"
+#include "Constants.h"
+#include "Printing.h"
+#include "CommonFunctions.h"
 
 #ifndef _WIN32
 #include <sys/socket.h>
 #endif
 
-#pragma region Constants
-const unsigned kArgumentError = 3;
-const unsigned kAFCCustomError = 4;
-const unsigned kApplicationsCustomError = 5;
-const unsigned kUnexpectedError = 13;
-
-const unsigned kADNCIMessageConnected = 1;
-const unsigned kADNCIMessageDisconnected = 2;
-const unsigned kADNCIMessageUnknown = 3;
-const unsigned kADNCIMessageTrusted = 4;
-const unsigned kDeviceLogBytesToRead = 1 << 10;
-const unsigned kDeviceFileBytesToRead = 200;
-#ifdef _WIN32
-const unsigned kCFStringEncodingUTF8 = 0x08000100;
-#endif
-const unsigned kAMDNotFoundError = 0xe8000008;
-const unsigned kAMDAPIInternalError = 0xe8000067;
-const unsigned kAppleServiceNotStartedErrorCode = 0xE8000063;
-const unsigned kMountImageAlreadyMounted = 0xE8000076; // Note: This error code is actually named kAMDMobileImageMounterImageMountFailed but AppBuilder CLI and other sources think that getting this exit code during a mount is okay
-const unsigned kIncompatibleSignature = 0xE8000033; // Note: This error code is actually named kAMDInvalidDiskImageError but CLI and other sources think that getting this exit code during a mount is okay
-const char *kAppleFileConnection = "com.apple.afc";
-const char *kInstallationProxy = "com.apple.mobile.installation_proxy";
-const char *kHouseArrest = "com.apple.mobile.house_arrest";
-const char *kNotificationProxy = "com.apple.mobile.notification_proxy";
-const char *kSyslog = "com.apple.syslog_relay";
-const char *kMobileImageMounter = "com.apple.mobile.mobile_image_mounter";
-const char *kDebugServer = "com.apple.debugserver";
-
-const char *kUnreachableStatus = "Unreachable";
-const char *kConnectedStatus = "Connected";
-
-const char *kDeviceFound = "deviceFound";
-const char *kDeviceLost = "deviceLost";
-const char *kDeviceTrusted = "deviceTrusted";
-const char *kDeviceUnknown = "deviceUnknown";
-
-const char *kId = "id";
-const char *kNullMessageId = "null";
-const char *kDeviceId = "deviceId";
-const char *kDeveloperDiskImage = "ddi";
-const char *kAppId = "appId";
-const char *kNotificationName = "notificationName";
-const char *kDestination = "destination";
-const char *kSource = "source";
-const char *kPathLowerCase = "path";
-const char *kPathPascalCase = "Path";
-const char *kPathUpperCase = "PATH";
-const char *kError = "error";
-const char *kErrorKey = "Error";
-const char *kStatusKey = "Status";
-const char *kResponse = "response";
-const char *kMessage = "message";
-const char *kComplete = "Complete";
-const char *kCode = "code";
-const char *kProductVersion = "ProductVersion";
-const int kAFCFileModeRead = 2;
-const int kAFCFileModeWrite = 3;
-const char *kPathSeparators = "/\\";
-const char kUnixPathSeparator = '/';
-const char *kEventString = "event";
-const char *kRefreshAppMessage = "com.telerik.app.refreshApp";
-
-const std::string kFilePrefix("file:///");
-const std::string kDocumentsFolder("/Documents/");
-const std::string kVendDocumentsCommandName("VendDocuments");
-const std::string kVendContainerCommandName("VendContainer");
-
-#pragma endregion Constants
-
-#define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
-#define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id, value) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return value; }
-#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
-
 
 #pragma region Dll_Variable_Definitions
 
-#ifdef _WIN32
 device_notification_subscribe_ptr __AMDeviceNotificationSubscribe;
 HINSTANCE mobile_device_dll;
 HINSTANCE core_foundation_dll;
@@ -153,30 +72,14 @@ afc_fileref_read __AFCFileRefRead;
 afc_get_device_info_key __AFCGetDeviceInfoKey;
 afc_fileref_write __AFCFileRefWrite;
 afc_fileref_close __AFCFileRefClose;
-#endif // _WIN32
 
 #pragma endregion Dll_Variable_Definitions
+
 
 using json = nlohmann::json;
 
 int __result;
 std::map<std::string, DeviceData> devices;
-
-void print(const char* str)
-{
-	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(str);
-	char* buff = new char[length_encoded_message.length];
-	std::setvbuf(stdout, buff, _IOFBF, length_encoded_message.length);
-	fwrite(length_encoded_message.message, length_encoded_message.length, 1, stdout);
-	fflush(stdout);
-	delete[] buff;
-}
-
-void print(const json& message)
-{
-	std::string str = message.dump();
-	print(str.c_str());
-}
 
 std::string get_dirname(const char *path)
 {
@@ -410,27 +313,6 @@ void device_notification_callback(const DevicePointer* device_ptr)
 	print(result);
 }
 
-
-void print_error(const char *message, std::string device_identifier, std::string method_id, int code =
-#ifdef _WIN32
-                 GetLastError()
-#else
-                 kAMDNotFoundError
-#endif
-
-)
-{
-	json exception;
-	exception[kError][kMessage] = message;
-	exception[kError][kCode] = code;
-	exception[kDeviceId] = device_identifier;
-	exception[kId] = method_id;
-	//Decided it's a better idea to print everything to stdout
-	//Not a good practice, but the client process wouldn't have to monitor both streams
-	//fprintf(stderr, "%s", exception.dump().c_str());
-	print(exception);
-}
-
 #ifdef _WIN32
 void add_dll_paths_to_environment()
 {
@@ -490,7 +372,7 @@ void start_run_loop()
 	CFRunLoopRun();
 }
 
-HANDLE start_service(std::string device_identifier, const char* service_name, std::string method_id, bool should_log_error = true)
+HANDLE start_service(std::string device_identifier, const char* service_name, std::string method_id, bool should_log_error)
 {
 	if (!devices.count(device_identifier))
 	{
@@ -521,193 +403,6 @@ HANDLE start_service(std::string device_identifier, const char* service_name, st
 	devices[device_identifier].services[service_name] = socket;
 
 	return socket;
-}
-
-std::string exec(const char* cmd)
-{
-    std::array<char, 128> buffer;
-    std::string result;
-    std::shared_ptr<FILE> pipe(popen(cmd, "r"), pclose);
-    if (!pipe) return "";
-    while (!feof(pipe.get()))
-    {
-        if (fgets(buffer.data(), 128, pipe.get()) != NULL)
-        {
-            result += buffer.data();
-        }
-    }
-
-    return result;
-}
-
-#ifndef _WIN32
-std::string get_developer_disk_image_directory_path(std::string& device_identifier)
-{
-    if (!devices.count(device_identifier))
-    {
-        return "";
-    }
-    
-    std::string dev_dir_path = exec("xcode-select -print-path");
-    dev_dir_path = trim_end(dev_dir_path) + "Platforms/iPhoneOS.platform/DeviceSupport";
-    std::string build_version = get_device_property_value(device_identifier, "BuildVersion");
-    std::string product_version = get_device_property_value(device_identifier, kProductVersion);
-    std::vector<std::string> product_version_parts = split(product_version, '.');
-    std::string product_major_version = product_version_parts[0];
-    std::string product_minor_version = product_version_parts[1];
-    std::string result = "";
-    
-    DIR *dir;
-    struct dirent *ent;
-    if ((dir = opendir(dev_dir_path.c_str())) != NULL) {
-        // The contents of this directory are named like this
-        // <Major>.<Minor>[ (<Build>)]
-        // 9.0
-        // 9.1 (13B137)
-        while ((ent = readdir (dir)) != NULL) {
-            std::vector<std::string> parts = split(ent->d_name, ' ');
-            std::vector<std::string> version_parts = split(parts[0], '.');
-            std::string major_version = version_parts[0];
-            std::string minor_version = version_parts[1];
-            std::string build = parts.size() > 1 ? parts[1].substr(1, parts[1].size() - 2) : "";
-            if (major_version == product_major_version)
-            {
-                if (!result.size())
-                {
-                    result = dev_dir_path + kUnixPathSeparator + ent->d_name;
-                }
-                else
-                {
-                    // is this better than the last match?
-                    if(minor_version == product_minor_version)
-                    {
-                        if(build == build_version)
-                        {
-                            // it won't get better than this
-                            return dev_dir_path + kUnixPathSeparator + ent->d_name;
-                        }
-                        else
-                        {
-                            // major and minor match - consider this better off than last time
-                            result = dev_dir_path + kUnixPathSeparator + ent->d_name;
-                        }
-                    }
-                }
-            }
-        }
-        closedir (dir);
-    }
-    
-    return result;
-}
-
-#endif //!_WIN32
-
-std::string get_signature_base64(std::string image_signature_path)
-{
-    FileInfo signature_file_info = get_file_info(image_signature_path, true);
-    return base64_encode(&signature_file_info.contents[0], signature_file_info.size);
-}
-
-bool mount_image(std::string& device_identifier, std::string& image_path, std::string& method_id)
-{
-#ifdef _WIN32
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(!exists(image_path), "Could not find developer disk image", device_identifier, method_id, false);
-	std::string image_signature_path = image_path + ".signature";
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(!exists(image_signature_path), "Could not find developer disk image signature", device_identifier, method_id, false);
-
-	HANDLE mountFd = start_service(device_identifier, kMobileImageMounter, method_id);
-	if (!mountFd)
-	{
-		return false;
-	}
-
-	FileInfo image_file_info = get_file_info(image_path, false);
-	std::string signature_base64 = get_signature_base64(image_signature_path);
-
-	std::stringstream xml_command;
-	int bytes_sent;
-	std::map<std::string, boost::any> dict;
-	xml_command <<  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-					"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
-					"<plist version=\"1.0\">"
-					"<dict>"
-						"<key>Command</key>"
-						"<string>ReceiveBytes</string>"
-						"<key>ImageSize</key>"
-						"<integer>" + std::to_string(image_file_info.size) + "</integer>"
-						"<key>ImageType</key>"
-						"<string>Developer</string>"
-						"<key>ImageSignature</key>"
-						"<data>" + signature_base64 + "</data>"
-					"</dict>"
-					"</plist>";
-
-	bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
-	dict = receive_message((SOCKET)mountFd);
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
-	if (boost::any_cast<std::string>(dict[kStatusKey]) == "ReceiveBytesAck")
-	{
-		image_file_info = get_file_info(image_path, true);
-		bytes_sent = send((SOCKET)mountFd, &image_file_info.contents[0], image_file_info.size, 0);
-		dict = receive_message((SOCKET)mountFd);
-		xml_command.str("");
-		xml_command <<  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
-						"<plist version=\"1.0\">"
-						"<dict>"
-							"<key>Command</key>"
-							"<string>MountImage</string>"
-							"<key>ImageType</key>"
-							"<string>Developer</string>"
-							"<key>ImageSignature</key>"
-							"<data>" + signature_base64 + "</data>"
-							"<key>ImagePath</key>"
-							"<string>/var/mobile/Media/PublicStaging/staging.dimage</string>"
-						"</dict>"
-						"</plist>";
-		bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
-		dict = receive_message((SOCKET)mountFd);
-		PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
-		return dict.count(kStatusKey) && has_complete_status(dict);
-	}
-	else
-	{
-		print_error("Could not transfer disk image", device_identifier, method_id, kUnexpectedError);
-		return false;
-	}
-#else
-    std::string developer_disk_image_directory_path = get_developer_disk_image_directory_path(device_identifier);
-    std::string osx_image_path = developer_disk_image_directory_path + kUnixPathSeparator + "DeveloperDiskImage.dmg";
-    std::string osx_image_signature_path = osx_image_path + ".signature";
-    start_session(device_identifier);
-    FILE* sig = fopen(osx_image_signature_path.c_str(), "rb");
-    // Signature files ALWAYS have a size of exactly 128 bytes
-    void *sig_buffer = malloc(128);
-    bool managed_to_read_signature = fread(sig_buffer, 1, 128, sig) == 128;
-    fclose(sig);
-    
-    if (!managed_to_read_signature)
-    {
-        return false;
-    }
-    
-    CFDataRef sig_data = CFDataCreateWithBytesNoCopy(NULL, (const UInt8 *)sig_buffer, 128, NULL);
-    CFStringRef cf_image_path = create_CFString(osx_image_path.c_str());
-
-    const void *keys_arr[] = { CFSTR("ImageType"), CFSTR("ImageSignature") };
-    const void *values_arr[] = { CFSTR("Developer"), sig_data };
-    CFDictionaryRef options = CFDictionaryCreate(NULL, keys_arr, values_arr, 2, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-    // The second-to-last argument is actually a function that is invoked periodically as to update the status
-    // Its first argument is a pointer to Plist object that when deserialized has a Status property which tells us how far down the road we've come
-    // Currently we do not need progress indication of this operation so I'm passing nullptr here
-    unsigned result = AMDeviceMountImage(devices[device_identifier].device_info, cf_image_path, options, nullptr, NULL);
-    stop_session(device_identifier);
-    CFRelease(sig_data);
-    CFRelease(cf_image_path);
-    CFRelease(options);
-    return result == 0 || result == kIncompatibleSignature || result == kMountImageAlreadyMounted;
-#endif // _WIN32
 }
 
 HANDLE start_house_arrest(std::string device_identifier, const char* application_identifier, std::string method_id)

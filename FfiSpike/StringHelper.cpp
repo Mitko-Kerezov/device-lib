@@ -2,6 +2,9 @@
 
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
+#include <functional>
+#include <cctype>
 
 std::string to_hex(const std::string & s)
 {
