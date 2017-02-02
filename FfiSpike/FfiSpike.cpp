@@ -6,15 +6,6 @@
 #include <memory>
 #include <thread>
 #include <sys/stat.h>
-#ifdef _WIN32
-#include <io.h>
-#include <fcntl.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#pragma comment(lib, "Ws2_32.lib")
-
-#endif
 
 #include "json.hpp"
 #include "PlistCpp/Plist.hpp"
@@ -25,85 +16,17 @@
 #include "StringHelper.h"
 #include "Declarations.h"
 #include "GDBHelper.h"
+#include "Constants.h"
+#include "Printing.h"
+#include "CommonFunctions.h"
 
 #ifndef _WIN32
 #include <sys/socket.h>
 #endif
 
-#pragma region Constants
-const unsigned kArgumentError = 3;
-const unsigned kAFCCustomError = 4;
-const unsigned kApplicationsCustomError = 5;
-const unsigned kUnexpectedError = 13;
-
-const unsigned kADNCIMessageConnected = 1;
-const unsigned kADNCIMessageDisconnected = 2;
-const unsigned kADNCIMessageUnknown = 3;
-const unsigned kADNCIMessageTrusted = 4;
-const unsigned kDeviceLogBytesToRead = 1 << 10;
-const unsigned kDeviceFileBytesToRead = 200;
 #ifdef _WIN32
-const unsigned kCFStringEncodingUTF8 = 0x08000100;
-#endif
-const unsigned kAMDNotFoundError = 0xe8000008;
-const unsigned kAMDAPIInternalError = 0xe8000067;
-const unsigned kAppleServiceNotStartedErrorCode = 0xE8000063;
-const char *kAppleFileConnection = "com.apple.afc";
-const char *kInstallationProxy = "com.apple.mobile.installation_proxy";
-const char *kHouseArrest = "com.apple.mobile.house_arrest";
-const char *kNotificationProxy = "com.apple.mobile.notification_proxy";
-const char *kSyslog = "com.apple.syslog_relay";
-const char *kMobileImageMounter = "com.apple.mobile.mobile_image_mounter";
-const char *kDebugServer = "com.apple.debugserver";
-
-const char *kUnreachableStatus = "Unreachable";
-const char *kConnectedStatus = "Connected";
-
-const char *kDeviceFound = "deviceFound";
-const char *kDeviceLost = "deviceLost";
-const char *kDeviceTrusted = "deviceTrusted";
-const char *kDeviceUnknown = "deviceUnknown";
-
-const char *kId = "id";
-const char *kNullMessageId = "null";
-const char *kDeviceId = "deviceId";
-const char *kDeveloperDiskImage = "ddi";
-const char *kAppId = "appId";
-const char *kNotificationName = "notificationName";
-const char *kDestination = "destination";
-const char *kSource = "source";
-const char *kPathLowerCase = "path";
-const char *kPathPascalCase = "Path";
-const char *kPathUpperCase = "PATH";
-const char *kError = "error";
-const char *kErrorKey = "Error";
-const char *kStatusKey = "Status";
-const char *kResponse = "response";
-const char *kMessage = "message";
-const char *kComplete = "Complete";
-const char *kCode = "code";
-const int kAFCFileModeRead = 2;
-const int kAFCFileModeWrite = 3;
-const char *kPathSeparators = "/\\";
-const char kUnixPathSeparator = '/';
-const char *kEventString = "event";
-const char *kRefreshAppMessage = "com.telerik.app.refreshApp";
-
-const std::string kFilePrefix("file:///");
-const std::string kDocumentsFolder("/Documents/");
-const std::string kVendDocumentsCommandName("VendDocuments");
-const std::string kVendContainerCommandName("VendContainer");
-
-#pragma endregion Constants
-
-#define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
-#define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id, value) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return value; }
-#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
-
-
 #pragma region Dll_Variable_Definitions
 
-#ifdef _WIN32
 device_notification_subscribe_ptr __AMDeviceNotificationSubscribe;
 HINSTANCE mobile_device_dll;
 HINSTANCE core_foundation_dll;
@@ -149,30 +72,14 @@ afc_fileref_read __AFCFileRefRead;
 afc_get_device_info_key __AFCGetDeviceInfoKey;
 afc_fileref_write __AFCFileRefWrite;
 afc_fileref_close __AFCFileRefClose;
-#endif // _WIN32
 
 #pragma endregion Dll_Variable_Definitions
+#endif // _WIN32
 
 using json = nlohmann::json;
 
 int __result;
 std::map<std::string, DeviceData> devices;
-
-void print(const char* str)
-{
-	LengthEncodedMessage length_encoded_message = get_message_with_encoded_length(str);
-	char* buff = new char[length_encoded_message.length];
-	std::setvbuf(stdout, buff, _IOFBF, length_encoded_message.length);
-	fwrite(length_encoded_message.message, length_encoded_message.length, 1, stdout);
-	fflush(stdout);
-	delete[] buff;
-}
-
-void print(const json& message)
-{
-	std::string str = message.dump();
-	print(str.c_str());
-}
 
 std::string get_dirname(const char *path)
 {
@@ -180,33 +87,6 @@ std::string get_dirname(const char *path)
 	std::string str(path);
 	found = str.find_last_of(kPathSeparators);
 	return str.substr(0, found);
-}
-
-void split(const std::string &s, char delim, std::vector<std::string> &elems) {
-	std::stringstream ss;
-	ss.str(s);
-	std::string item;
-	while (std::getline(ss, item, delim))
-	{
-		elems.push_back(item);
-	}
-}
-
-std::vector<std::string> split(const std::string &s, char delim) {
-	std::vector<std::string> elems;
-	split(s, delim, elems);
-	return elems;
-}
-
-void replace_all(std::string& str, const std::string& from, const std::string& to) {
-	if (from.empty())
-		return;
-	size_t start_pos = 0;
-	while ((start_pos = str.find(from, start_pos)) != std::string::npos)
-	{
-		str.replace(start_pos, from.length(), to);
-		start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
-	}
 }
 
 void windows_path_to_unix(std::string& path)
@@ -241,7 +121,7 @@ CFStringRef create_CFString(const char* str)
 	return CFStringCreateWithCString(NULL, str, kCFStringEncodingUTF8);
 }
 
-int start_session(std::string device_identifier)
+int start_session(std::string& device_identifier)
 {
 	if (devices[device_identifier].sessions < 1)
 	{
@@ -260,7 +140,7 @@ int start_session(std::string device_identifier)
 	return 0;
 }
 
-void stop_session(std::string device_identifier)
+void stop_session(std::string& device_identifier)
 {
 	if (--devices[device_identifier].sessions < 1)
 	{
@@ -270,7 +150,7 @@ void stop_session(std::string device_identifier)
 	}
 }
 
-std::string get_device_property_value(std::string device_identifier, char* property_name)
+std::string get_device_property_value(std::string& device_identifier, const char* property_name)
 {
 	const DeviceInfo* device_info = devices[device_identifier].device_info;
 	std::string result;
@@ -352,7 +232,7 @@ void get_device_properties(std::string device_identifier, json &result)
 	result["status"] = get_device_status(device_identifier);
 	result["productType"] = get_device_property_value(device_identifier, "ProductType");
 	result["deviceName"] = get_device_property_value(device_identifier, "DeviceName");
-	result["productVersion"] = get_device_property_value(device_identifier, "ProductVersion");
+	result["productVersion"] = get_device_property_value(device_identifier, kProductVersion);
 	result["deviceColor"] = get_device_property_value(device_identifier, "DeviceColor");
 }
 
@@ -404,27 +284,6 @@ void device_notification_callback(const DevicePointer* device_ptr)
 	}
 
 	print(result);
-}
-
-
-void print_error(const char *message, std::string device_identifier, std::string method_id, int code =
-#ifdef _WIN32
-                 GetLastError()
-#else
-                 kAMDNotFoundError
-#endif
-
-)
-{
-	json exception;
-	exception[kError][kMessage] = message;
-	exception[kError][kCode] = code;
-	exception[kDeviceId] = device_identifier;
-	exception[kId] = method_id;
-	//Decided it's a better idea to print everything to stdout
-	//Not a good practice, but the client process wouldn't have to monitor both streams
-	//fprintf(stderr, "%s", exception.dump().c_str());
-	print(exception);
 }
 
 #ifdef _WIN32
@@ -486,7 +345,7 @@ void start_run_loop()
 	CFRunLoopRun();
 }
 
-HANDLE start_service(std::string device_identifier, const char* service_name, std::string method_id, bool should_log_error = true)
+HANDLE start_service(std::string device_identifier, const char* service_name, std::string method_id, bool should_log_error)
 {
 	if (!devices.count(device_identifier))
 	{
@@ -517,79 +376,6 @@ HANDLE start_service(std::string device_identifier, const char* service_name, st
 	devices[device_identifier].services[service_name] = socket;
 
 	return socket;
-}
-
-bool mount_image(std::string device_identifier, std::string image_path, std::string method_id)
-{
-#ifdef _WIN32
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(!exists(image_path), "Could not find developer disk image", device_identifier, method_id, false);
-	std::string image_signature_path = image_path + ".signature";
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(!exists(image_signature_path), "Could not find developer disk image signature", device_identifier, method_id, false);
-
-	HANDLE mountFd = start_service(device_identifier, kMobileImageMounter, method_id);
-	if (!mountFd)
-	{
-		return false;
-	}
-
-	FileInfo image_file_info = get_file_info(image_path, false);
-	FileInfo signature_file_info = get_file_info(image_signature_path, true);
-	std::string signature_base64 = base64_encode(&signature_file_info.contents[0], signature_file_info.size);
-
-	std::stringstream xml_command;
-	int bytes_sent;
-	std::map<std::string, boost::any> dict;
-	xml_command <<  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-					"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
-					"<plist version=\"1.0\">"
-					"<dict>"
-						"<key>Command</key>"
-						"<string>ReceiveBytes</string>"
-						"<key>ImageSize</key>"
-						"<integer>" + std::to_string(image_file_info.size) + "</integer>"
-						"<key>ImageType</key>"
-						"<string>Developer</string>"
-						"<key>ImageSignature</key>"
-						"<data>" + signature_base64 + "</data>"
-					"</dict>"
-					"</plist>";
-
-	bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
-	dict = receive_message((SOCKET)mountFd);
-	PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
-	if (boost::any_cast<std::string>(dict[kStatusKey]) == "ReceiveBytesAck")
-	{
-		image_file_info = get_file_info(image_path, true);
-		bytes_sent = send((SOCKET)mountFd, &image_file_info.contents[0], image_file_info.size, 0);
-		dict = receive_message((SOCKET)mountFd);
-		xml_command.str("");
-		xml_command <<  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
-						"<plist version=\"1.0\">"
-						"<dict>"
-							"<key>Command</key>"
-							"<string>MountImage</string>"
-							"<key>ImageType</key>"
-							"<string>Developer</string>"
-							"<key>ImageSignature</key>"
-							"<data>" + signature_base64 + "</data>"
-							"<key>ImagePath</key>"
-							"<string>/var/mobile/Media/PublicStaging/staging.dimage</string>"
-						"</dict>"
-						"</plist>";
-		bytes_sent = send_message(xml_command.str().c_str(), (SOCKET)mountFd);
-		dict = receive_message((SOCKET)mountFd);
-		PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(dict.count(kErrorKey), boost::any_cast<std::string>(dict[kErrorKey]).c_str(), device_identifier, method_id, false);
-		return dict.count(kStatusKey) && has_complete_status(dict);
-	}
-	else
-	{
-		print_error("Could not transfer disk image", device_identifier, method_id, kUnexpectedError);
-		return false;
-	}
-#else
-    return true;
-#endif // _WIN32
 }
 
 HANDLE start_house_arrest(std::string device_identifier, const char* application_identifier, std::string method_id)

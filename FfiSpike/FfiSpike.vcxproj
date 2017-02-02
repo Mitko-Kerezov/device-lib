@@ -164,13 +164,18 @@
     <ClCompile Include="FileHelper.cpp" />
     <ClCompile Include="GDBHelper.cpp" />
     <ClCompile Include="json.hpp" />
+    <ClCompile Include="mac_impl.cpp" />
     <ClCompile Include="PlistCpp\Plist.cpp" />
     <ClCompile Include="PlistCpp\PlistDate.cpp" />
     <ClCompile Include="PlistCpp\pugixml.cpp" />
+    <ClCompile Include="Printing.cpp" />
     <ClCompile Include="SocketHelper.cpp" />
     <ClCompile Include="StringHelper.cpp" />
+    <ClCompile Include="windows_impl.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CommonFunctions.h" />
+    <ClInclude Include="Constants.h" />
     <ClInclude Include="FileHelper.h" />
     <ClInclude Include="GDBHelper.h" />
     <ClInclude Include="PlistCpp\base64.hpp" />
@@ -443,6 +448,7 @@
     <ClInclude Include="PlistCpp\PlistDate.hpp" />
     <ClInclude Include="PlistCpp\pugiconfig.hpp" />
     <ClInclude Include="PlistCpp\pugixml.hpp" />
+    <ClInclude Include="Printing.h" />
     <ClInclude Include="SocketHelper.h" />
     <ClInclude Include="StringHelper.h" />
   </ItemGroup>

@@ -1,11 +1,25 @@
 #pragma once
 
-#ifndef _WIN32
+#pragma region Macros
+#define RETURN_IF_FAILED_RESULT(expr) ; if((__result = (expr))) { return __result; }
+#define PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id, value) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return value; }
+#define PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(expr, error_msg, device_identifier, method_id) ; if((__result = (expr))) { print_error(error_msg, device_identifier, method_id, __result); return; }
+#pragma endregion Macros
+
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#pragma comment(lib, "Ws2_32.lib")
+#else
 typedef void* HANDLE;
 typedef unsigned long long SOCKET;
 #endif // _WIN32
 
 #include <string>
+#include <map>
 
 #pragma region Data_Structures_Definition
 
@@ -103,7 +117,7 @@ typedef bool(__cdecl *cfstring_get_c_string)(void*, char*, unsigned, unsigned);
 typedef unsigned long(__cdecl *cf_get_type_id)(void*);
 typedef unsigned long(__cdecl *cf_get_concrete_type_id)();
 typedef unsigned(__cdecl *cfdictionary_get_count)(CFDictionaryRef);
-typedef void(__cdecl *cfdictionary_get_keys_and_values)(CFDictionaryRef, void**, void**);
+typedef void(__cdecl *cfdictionary_get_keys_and_values)(CFDictionaryRef, const void**, const void**);
 typedef CFStringRef(__cdecl *cfstring_create_with_cstring)(void*, const char*, unsigned);
 typedef unsigned(__cdecl *device_secure_operation_with_path)(int, const DeviceInfo*, CFURLRef, CFDictionaryRef, void(*f)(), int);
 typedef void(__cdecl *cfrelease)(CFStringRef);
@@ -179,7 +193,6 @@ typedef unsigned(__cdecl *device_lookup_applications)(const DeviceInfo*, CFDicti
 #define AFCFileRefClose GET_IF_EXISTS(__AFCFileRefClose, afc_fileref_close, mobile_device_dll, "AFCFileRefClose")
 #endif // _WIN32
 
-
 #pragma endregion Dll_Method_Definitions
 
 #ifndef _WIN32
@@ -191,8 +204,9 @@ extern "C"
 	unsigned AMDeviceNotificationSubscribe(void(*f)(const DevicePointer*), long, long, long, HANDLE*);
 	CFStringRef AMDeviceCopyDeviceIdentifier(const DeviceInfo*);
 	CFStringRef AMDeviceCopyValue(const DeviceInfo*, CFStringRef, CFStringRef);
+	unsigned AMDeviceMountImage(const DeviceInfo*, CFStringRef, CFDictionaryRef, void(*f)(void*, int), void*);
 	unsigned AMDeviceStartService(const DeviceInfo*, CFStringRef, HANDLE*, void*);
-    unsigned AMDeviceLookupApplications(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
+	unsigned AMDeviceLookupApplications(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
 	unsigned AMDeviceUninstallApplication(HANDLE, CFStringRef, void*, void(*f)(), void*);
 	unsigned AMDeviceStartSession(const DeviceInfo*);
 	unsigned AMDeviceStopSession(const DeviceInfo*);
@@ -216,7 +230,6 @@ extern "C"
 	unsigned AFCFileRefRead(afc_connection*, afc_file_ref, void*, size_t*);
 	unsigned AFCFileRefWrite(afc_connection*, afc_file_ref, const void*, size_t);
 	unsigned AFCFileRefClose(afc_connection*, afc_file_ref);
-
 }
 
 #endif // !_WIN32
