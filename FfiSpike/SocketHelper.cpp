@@ -16,6 +16,34 @@ int send_message(std::string message, SOCKET socket, long long length)
 	return send_message(message.c_str(), socket, length);
 }
 
+bool should_read_from_socket(SOCKET socket, int timeout)
+{
+	// The code is stolen from here http://stackoverflow.com/questions/30395258/setting-timeout-to-recv-function
+	fd_set set;
+	struct timeval time_to_wait;
+	FD_ZERO(&set); /* clear the set */
+	FD_SET(socket, &set); /* add our file descriptor to the set */
+	time_to_wait.tv_sec = timeout;
+	// If we don't set tv_usec this method won't work.
+	time_to_wait.tv_usec = 0;
+	// We need the + 1 here because we add our socket to the set and the first param of the select (nfds)
+	// is the maximum socket number to read from.
+	// nfds is the highest-numbered file descriptor in any of the three sets, plus 1 - http://manpages.courier-mta.org/htmlman2/select.2.html
+	int rv = select(socket + 1, &set, NULL, NULL, &time_to_wait);
+	return rv;
+}
+
+std::map<std::string, boost::any> receive_message(SOCKET socket, int timeout)
+{
+
+	if (!should_read_from_socket(socket, timeout))
+	{
+		return std::map<std::string, boost::any>();
+	}
+
+	return receive_message(socket);
+}
+
 std::map<std::string, boost::any> receive_message(SOCKET socket)
 {
 	std::map<std::string, boost::any> dict;
