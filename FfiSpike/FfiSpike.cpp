@@ -652,7 +652,7 @@ void list_files(std::string device_identifier, const char *application_identifie
 	}
 }
 
-bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id, std::string device_identifier)
+bool ensure_device_path_exists(std::string &device_path, afc_connection *connection)
 {
 	std::vector<std::string> directories = split(device_path, kUnixPathSeparator);
 	std::string curent_device_path("");
@@ -679,6 +679,13 @@ void accumulate_errors(const std::function<unsigned ()>& expression_to_evaluate,
 }
 
 void upload_file(std::string device_identifier, const char *application_identifier, const std::vector<FileUploadData>& files, std::string method_id) {
+	json success_json = json({ { kResponse, "Successfully uploaded files" },{ kId, method_id },{ kDeviceId, device_identifier } });
+	if (!files.size())
+	{
+		print(success_json);
+		return;
+	}
+
 	std::string afc_destination_str = windows_path_to_unix(files[0].destination);
 	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, afc_destination_str, method_id);
 	if (!afc_conn_p)
@@ -692,22 +699,18 @@ void upload_file(std::string device_identifier, const char *application_identifi
 	
 	for (size_t i = 0; i < files.size(); i++)
 	{
+		FileUploadData current_file_data = files[i];
 		file_upload_threads.emplace_back([=, &errors]() -> void
 		{
-			FileUploadData current_file_data = files[i];
 			afc_file_ref file_ref;
 			std::string source = current_file_data.source;
 			std::string destination = current_file_data.destination;
+			FileInfo file_info = get_file_info(source, true);
 
-			std::ifstream file(source, std::ios::binary | std::ios::ate);
-			std::streamsize size = file.tellg();
-			file.seekg(0, std::ios::beg);
-			std::vector<char> file_content(size);
-
-			if (file.read(file_content.data(), size))
+			if (file_info.size)
 			{
 				std::string dir_name = get_dirname(destination);
-				if (ensure_device_path_exists(dir_name, afc_conn_p, method_id, device_identifier))
+				if (ensure_device_path_exists(dir_name, afc_conn_p))
 				{
 					std::stringstream error_message;
 					AFCRemovePath(afc_conn_p, destination.c_str());
@@ -715,7 +718,7 @@ void upload_file(std::string device_identifier, const char *application_identifi
 					accumulate_errors([&]() -> unsigned { return AFCFileRefOpen(afc_conn_p, destination.c_str(), kAFCFileModeWrite, &file_ref); }, error_message.str(), errors);
 					error_message.str("");
 					error_message << "Could not write to file: " << destination;
-					accumulate_errors([&]() -> unsigned { return AFCFileRefWrite(afc_conn_p, file_ref, &file_content[0], file_content.size()); }, error_message.str(), errors);
+					accumulate_errors([&]() -> unsigned { return AFCFileRefWrite(afc_conn_p, file_ref, &file_info.contents[0], file_info.size); }, error_message.str(), errors);
 					error_message.str("");
 					error_message << "Could not close file reference: " << destination;
 					accumulate_errors([&]() -> unsigned { return AFCFileRefClose(afc_conn_p, file_ref); }, error_message.str(), errors);
@@ -744,7 +747,7 @@ void upload_file(std::string device_identifier, const char *application_identifi
 
 	if (!errors.size())
 	{
-		print(json({ { kResponse, "Successfully uploaded files" }, { kId, method_id }, { kDeviceId, device_identifier } }));
+		print(success_json);
 	}
 	else
 	{
@@ -1186,21 +1189,16 @@ int main()
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::vector<json> files = arg.value(kFiles, json::array()).get<std::vector<json>>();
 
-					std::thread device_specific_thread = std::thread([device_identifier, application_identifier, files, method_id]() -> void
+					std::thread([=]() -> void
 					{
 						std::vector<FileUploadData> files_data;
 						for (json file : files)
 						{
-							FileUploadData data;
-							data.source = file.value(kSource, "");
-							data.destination = file.value(kDestination, "");
-							files_data.push_back(data);
+							files_data.push_back({ file.value(kSource, ""), file.value(kDestination, "") });
 						}
 
 						upload_file(device_identifier, application_identifier.c_str(), files_data, method_id);
-					});
-
-					device_specific_thread.detach();
+					}).detach();
 				}
 			}
 			else if (method_name == "delete")
