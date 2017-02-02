@@ -204,9 +204,9 @@ extern "C"
 	unsigned AMDeviceNotificationSubscribe(void(*f)(const DevicePointer*), long, long, long, HANDLE*);
 	CFStringRef AMDeviceCopyDeviceIdentifier(const DeviceInfo*);
 	CFStringRef AMDeviceCopyValue(const DeviceInfo*, CFStringRef, CFStringRef);
-    unsigned AMDeviceMountImage(const DeviceInfo*, CFStringRef, CFDictionaryRef, void(*f)(void*, int), void*);
+	unsigned AMDeviceMountImage(const DeviceInfo*, CFStringRef, CFDictionaryRef, void(*f)(void*, int), void*);
 	unsigned AMDeviceStartService(const DeviceInfo*, CFStringRef, HANDLE*, void*);
-    unsigned AMDeviceLookupApplications(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
+	unsigned AMDeviceLookupApplications(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
 	unsigned AMDeviceUninstallApplication(HANDLE, CFStringRef, void*, void(*f)(), void*);
 	unsigned AMDeviceStartSession(const DeviceInfo*);
 	unsigned AMDeviceStopSession(const DeviceInfo*);
@@ -230,7 +230,6 @@ extern "C"
 	unsigned AFCFileRefRead(afc_connection*, afc_file_ref, void*, size_t*);
 	unsigned AFCFileRefWrite(afc_connection*, afc_file_ref, const void*, size_t);
 	unsigned AFCFileRefClose(afc_connection*, afc_file_ref);
-
 }
 
 #endif // !_WIN32

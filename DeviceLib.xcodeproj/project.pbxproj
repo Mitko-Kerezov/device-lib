@@ -17,6 +17,9 @@
 		7038CB3D1DEEDB4C00A3D335 /* Plist.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7038CB351DEEDB4C00A3D335 /* Plist.cpp */; };
 		7038CB3E1DEEDB4C00A3D335 /* PlistDate.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7038CB371DEEDB4C00A3D335 /* PlistDate.cpp */; };
 		7038CB3F1DEEDB4C00A3D335 /* pugixml.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7038CB3A1DEEDB4C00A3D335 /* pugixml.cpp */; };
+		709A6CD11E435D11006F76C7 /* mac_impl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 709A6CCD1E435D11006F76C7 /* mac_impl.cpp */; };
+		709A6CD21E435D11006F76C7 /* Printing.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 709A6CCE1E435D11006F76C7 /* Printing.cpp */; };
+		709A6CD31E435D11006F76C7 /* windows_impl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 709A6CD01E435D11006F76C7 /* windows_impl.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -321,6 +324,12 @@
 		7038CB3A1DEEDB4C00A3D335 /* pugixml.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = pugixml.cpp; sourceTree = "<group>"; };
 		7038CB3B1DEEDB4C00A3D335 /* pugixml.hpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = pugixml.hpp; sourceTree = "<group>"; };
 		7038CB401DEEF31400A3D335 /* Declarations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Declarations.h; sourceTree = "<group>"; };
+		709A6CCB1E435D11006F76C7 /* CommonFunctions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CommonFunctions.h; sourceTree = "<group>"; };
+		709A6CCC1E435D11006F76C7 /* Constants.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Constants.h; sourceTree = "<group>"; };
+		709A6CCD1E435D11006F76C7 /* mac_impl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = mac_impl.cpp; sourceTree = "<group>"; };
+		709A6CCE1E435D11006F76C7 /* Printing.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Printing.cpp; sourceTree = "<group>"; };
+		709A6CCF1E435D11006F76C7 /* Printing.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Printing.h; sourceTree = "<group>"; };
+		709A6CD01E435D11006F76C7 /* windows_impl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = windows_impl.cpp; sourceTree = "<group>"; };
 		70F5F4281E13EE02005196BF /* configuration.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = configuration.xcconfig; path = FfiSpike/configuration.xcconfig; sourceTree = "<group>"; };
 		70F6ADAB1DEEB71300DD4722 /* devicelib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = devicelib; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -341,6 +350,12 @@
 		7038C9EF1DEEDB4C00A3D335 /* FfiSpike */ = {
 			isa = PBXGroup;
 			children = (
+				709A6CCB1E435D11006F76C7 /* CommonFunctions.h */,
+				709A6CCC1E435D11006F76C7 /* Constants.h */,
+				709A6CCD1E435D11006F76C7 /* mac_impl.cpp */,
+				709A6CCE1E435D11006F76C7 /* Printing.cpp */,
+				709A6CCF1E435D11006F76C7 /* Printing.h */,
+				709A6CD01E435D11006F76C7 /* windows_impl.cpp */,
 				702495661E4080B8009A6EBF /* FileHelper.cpp */,
 				702495671E4080B8009A6EBF /* FileHelper.h */,
 				702495681E4080B8009A6EBF /* GDBHelper.cpp */,
@@ -1142,11 +1157,14 @@
 				702495711E4080B8009A6EBF /* StringHelper.cpp in Sources */,
 				7024956E1E4080B8009A6EBF /* FileHelper.cpp in Sources */,
 				7038CB3E1DEEDB4C00A3D335 /* PlistDate.cpp in Sources */,
+				709A6CD31E435D11006F76C7 /* windows_impl.cpp in Sources */,
 				7038CB3D1DEEDB4C00A3D335 /* Plist.cpp in Sources */,
+				709A6CD21E435D11006F76C7 /* Printing.cpp in Sources */,
 				7024956F1E4080B8009A6EBF /* GDBHelper.cpp in Sources */,
 				7038CB3F1DEEDB4C00A3D335 /* pugixml.cpp in Sources */,
 				7038CB3C1DEEDB4C00A3D335 /* FfiSpike.cpp in Sources */,
 				702495701E4080B8009A6EBF /* SocketHelper.cpp in Sources */,
+				709A6CD11E435D11006F76C7 /* mac_impl.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

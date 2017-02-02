@@ -5,6 +5,7 @@
 
 #include "json.hpp"
 #include <string>
+#include "Constants.h"
 
 void print(const char* str);
 void print(const nlohmann::json& message);

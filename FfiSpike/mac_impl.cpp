@@ -2,6 +2,12 @@
 #include "Declarations.h"
 #include "dirent.h"
 #include "Constants.h"
+#include "StringHelper.h"
+#include "CommonFunctions.h"
+#include <map>
+#include <array>
+
+extern std::map<std::string, DeviceData> devices;
 
 std::string exec(const char* cmd)
 {

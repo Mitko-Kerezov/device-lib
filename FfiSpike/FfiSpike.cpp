@@ -24,7 +24,7 @@
 #include <sys/socket.h>
 #endif
 
-
+#ifdef _WIN32
 #pragma region Dll_Variable_Definitions
 
 device_notification_subscribe_ptr __AMDeviceNotificationSubscribe;
@@ -74,7 +74,7 @@ afc_fileref_write __AFCFileRefWrite;
 afc_fileref_close __AFCFileRefClose;
 
 #pragma endregion Dll_Variable_Definitions
-
+#endif // _WIN32
 
 using json = nlohmann::json;
 
@@ -87,33 +87,6 @@ std::string get_dirname(const char *path)
 	std::string str(path);
 	found = str.find_last_of(kPathSeparators);
 	return str.substr(0, found);
-}
-
-void split(const std::string &s, char delim, std::vector<std::string> &elems) {
-	std::stringstream ss;
-	ss.str(s);
-	std::string item;
-	while (std::getline(ss, item, delim))
-	{
-		elems.push_back(item);
-	}
-}
-
-std::vector<std::string> split(const std::string &s, char delim) {
-	std::vector<std::string> elems;
-	split(s, delim, elems);
-	return elems;
-}
-
-void replace_all(std::string& str, const std::string& from, const std::string& to) {
-	if (from.empty())
-		return;
-	size_t start_pos = 0;
-	while ((start_pos = str.find(from, start_pos)) != std::string::npos)
-	{
-		str.replace(start_pos, from.length(), to);
-		start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
-	}
 }
 
 void windows_path_to_unix(std::string& path)
@@ -148,7 +121,7 @@ CFStringRef create_CFString(const char* str)
 	return CFStringCreateWithCString(NULL, str, kCFStringEncodingUTF8);
 }
 
-int start_session(std::string device_identifier)
+int start_session(std::string& device_identifier)
 {
 	if (devices[device_identifier].sessions < 1)
 	{
@@ -167,7 +140,7 @@ int start_session(std::string device_identifier)
 	return 0;
 }
 
-void stop_session(std::string device_identifier)
+void stop_session(std::string& device_identifier)
 {
 	if (--devices[device_identifier].sessions < 1)
 	{
@@ -177,7 +150,7 @@ void stop_session(std::string device_identifier)
 	}
 }
 
-std::string get_device_property_value(std::string device_identifier, const char* property_name)
+std::string get_device_property_value(std::string& device_identifier, const char* property_name)
 {
 	const DeviceInfo* device_info = devices[device_identifier].device_info;
 	std::string result;
