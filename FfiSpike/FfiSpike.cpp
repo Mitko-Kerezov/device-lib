@@ -7,7 +7,6 @@
 #include <thread>
 #include <algorithm>
 #include <sys/stat.h>
-#include <future>
 
 #include "json.hpp"
 #include "PlistCpp/Plist.hpp"
@@ -771,7 +770,7 @@ void upload_file(std::string device_identifier, const char *application_identifi
 	}
 
 	std::vector<std::string> filtered_errors;
-	std::copy_if(std::begin(errors), std::end(errors), std::back_inserter(filtered_errors), [](auto e) { return e.size() != 0; });
+	std::copy_if(std::begin(errors), std::end(errors), std::back_inserter(filtered_errors), [](std::string e) { return e.size() != 0; });
 
 	if (!filtered_errors.size())
 	{
@@ -1034,7 +1033,7 @@ void post_notification(std::string device_identifier, PostNotificationInfo post_
 		print_error("Device not found", device_identifier, method_id, kAMDNotFoundError);
 		return;
 	}
-	
+
 	std::stringstream xml_command;
 	xml_command << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 						"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
