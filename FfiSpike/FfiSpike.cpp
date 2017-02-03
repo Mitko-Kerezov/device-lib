@@ -1191,6 +1191,22 @@ void start_app(std::string device_identifier, std::string application_identifier
 	}
 }
 
+void connect_to_port(std::string& device_identifier, int port, std::string& method_id)
+{
+    int connection_id = AMDeviceGetConnectionID(devices[device_identifier].device_info);
+    int socket;
+    int usb_result = USBMuxConnectByPort(connection_id, HTONS(port), &socket);
+    
+    if (socket < 0)
+    {
+        print_error("USBMuxConnectByPort returned bad file descriptor", device_identifier, method_id, usb_result);
+    }
+    else
+    {
+        print(json({ { kResponse, socket },{ kId, method_id },{ kDeviceId, device_identifier } }));
+    }
+}
+
 int main()
 {
 #ifdef _WIN32
@@ -1350,6 +1366,18 @@ int main()
 					stop_app(device_identifier, application_identifier, ddi, method_id);
 				}
 			}
+            else if (method_name == "connect")
+            {
+                for (json &arg : method_args)
+                {
+                    if (!validate_device_id_and_attrs(arg, method_id, { kDeviceId }))
+                        continue;
+                    
+                    std::string device_identifier = arg.value(kDeviceId, "");
+                    int port = arg.value("port", -1);
+                    connect_to_port(device_identifier, port, method_id);
+                }
+            }
 			else if (method_name == "exit")
 			{
 				return 0;
