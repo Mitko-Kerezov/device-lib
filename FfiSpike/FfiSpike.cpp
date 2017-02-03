@@ -5,6 +5,7 @@
 #include <sstream>
 #include <memory>
 #include <thread>
+#include <algorithm>
 #include <sys/stat.h>
 
 #include "json.hpp"
@@ -670,14 +671,6 @@ bool ensure_device_path_exists(std::string &device_path, afc_connection *connect
 	return true;
 }
 
-void accumulate_errors(const std::function<unsigned ()>& expression_to_evaluate, const std::string& error_message, std::vector<std::string>& errors_container)
-{
-	if (expression_to_evaluate())
-	{
-		errors_container.push_back(error_message);
-	}
-}
-
 void upload_file(std::string device_identifier, const char *application_identifier, const std::vector<FileUploadData>& files, std::string method_id) {
 	json success_json = json({ { kResponse, "Successfully uploaded files" },{ kId, method_id },{ kDeviceId, device_identifier } });
 	if (!files.size())
@@ -694,9 +687,12 @@ void upload_file(std::string device_identifier, const char *application_identifi
 		return;
 	}
 
-	std::vector<std::string> errors;
+	// We need to set the size of errors here because we need to access the elements by index.
+	// If we don't access them by index and use push_back from multiple threads, some of them will try to push at the same memory.
+	// The result of this will be an exception.
+	std::vector<std::string> errors(files.size());
 	std::vector<std::thread> file_upload_threads;
-	
+
 	for (size_t i = 0; i < files.size(); i++)
 	{
 		FileUploadData current_file_data = files[i];
@@ -715,14 +711,28 @@ void upload_file(std::string device_identifier, const char *application_identifi
 					std::stringstream error_message;
 					AFCRemovePath(afc_conn_p, destination.c_str());
 					error_message << "Could not open file " << destination << " for writing";
-					accumulate_errors([&]() -> unsigned { return AFCFileRefOpen(afc_conn_p, destination.c_str(), kAFCFileModeWrite, &file_ref); }, error_message.str(), errors);
+					if (AFCFileRefOpen(afc_conn_p, destination.c_str(), kAFCFileModeWrite, &file_ref))
+					{
+						errors[i] = error_message.str();
+						return;
+					}
+
 					error_message.str("");
 					error_message << "Could not write to file: " << destination;
-					accumulate_errors([&]() -> unsigned { return AFCFileRefWrite(afc_conn_p, file_ref, &file_info.contents[0], file_info.size); }, error_message.str(), errors);
+
+					if (AFCFileRefWrite(afc_conn_p, file_ref, &file_info.contents[0], file_info.size))
+					{
+						errors[i] = error_message.str();
+						return;
+					}
+
 					error_message.str("");
 					error_message << "Could not close file reference: " << destination;
-					accumulate_errors([&]() -> unsigned { return AFCFileRefClose(afc_conn_p, file_ref); }, error_message.str(), errors);
-					error_message.str("");
+					if (AFCFileRefClose(afc_conn_p, file_ref))
+					{
+						errors[i] = error_message.str();
+						return;
+					}
 				}
 				else
 				{
@@ -745,13 +755,16 @@ void upload_file(std::string device_identifier, const char *application_identifi
 		file_upload_thread.join();
 	}
 
-	if (!errors.size())
+	std::vector<std::string> filtered_errors;
+	std::copy_if(std::begin(errors), std::end(errors), std::back_inserter(filtered_errors), [](auto e) { return e.size() != 0; });
+
+	if (!filtered_errors.size())
 	{
 		print(success_json);
 	}
 	else
 	{
-		print_errors(errors, device_identifier, method_id, kAMDAPIInternalError);
+		print_errors(filtered_errors, device_identifier, method_id, kAMDAPIInternalError);
 	}
 }
 
