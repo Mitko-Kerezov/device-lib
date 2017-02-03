@@ -31,3 +31,13 @@ void print_error(const char *message, std::string device_identifier, std::string
 	//fprintf(stderr, "%s", exception.dump().c_str());
 	print(exception);
 }
+
+void print_errors(std::vector<std::string>& messages, std::string device_identifier, std::string method_id, int code)
+{
+	nlohmann::json exception;
+	exception[kError][kMessages] = messages;
+	exception[kError][kCode] = code;
+	exception[kDeviceId] = device_identifier;
+	exception[kId] = method_id;
+	print(exception);
+}

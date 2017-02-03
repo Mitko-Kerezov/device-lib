@@ -96,6 +96,11 @@ struct DeviceData {
 	//}
 };
 
+struct FileUploadData {
+	std::string source;
+	std::string destination;
+};
+
 #pragma endregion Data_Structures_Definition
 
 #pragma region Dll_Type_Definitions

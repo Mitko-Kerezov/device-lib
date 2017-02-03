@@ -32,7 +32,15 @@ declare module IOSDeviceLib {
 		path: string;
 	}
 
-	interface IFileOperationData extends IAppDevice, IDestination, ISource {
+	interface IFileData extends ISource, IDestination{
+	}
+
+	interface IFileOperationData extends IAppDevice, IFileData {
+	}
+
+
+	interface IUploadFilesData extends IAppDevice {
+		files: IFileData[];
 	}
 
 	interface IDeleteFileData extends IAppDevice, IDestination {
@@ -82,7 +90,7 @@ declare module IOSDeviceLib {
 		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
 		uninstall(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
 		list(listArray: IReadOperationData[]): Promise<IDeviceMultipleResponse>[];
-		upload(uploadArray: IFileOperationData[]): Promise<IDeviceResponse>[];
+		upload(uploadArray: IUploadFilesData[]): Promise<IDeviceResponse>[];
 		download(downloadArray: IFileOperationData[]): Promise<IDeviceResponse>[];
 		read(readArray: IReadOperationData[]): Promise<IDeviceResponse>[];
 		delete(deleteArray: IDeleteFileData[]): Promise<IDeviceResponse>[];

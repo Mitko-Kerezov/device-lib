@@ -5,6 +5,7 @@
 #include <sstream>
 #include <memory>
 #include <thread>
+#include <algorithm>
 #include <sys/stat.h>
 
 #include "json.hpp"
@@ -81,12 +82,11 @@ using json = nlohmann::json;
 int __result;
 std::map<std::string, DeviceData> devices;
 
-std::string get_dirname(const char *path)
+std::string get_dirname(std::string& path)
 {
 	size_t found;
-	std::string str(path);
-	found = str.find_last_of(kPathSeparators);
-	return str.substr(0, found);
+	found = path.find_last_of(kPathSeparators);
+	return path.substr(0, found);
 }
 
 void windows_path_to_unix(std::string& path)
@@ -94,7 +94,7 @@ void windows_path_to_unix(std::string& path)
 	replace_all(path, "\\", "/");
 }
 
-std::string windows_path_to_unix(const char *path)
+template<typename T> std::string windows_path_to_unix(T& path)
 {
 	std::string path_str(path);
 	replace_all(path_str, "\\", "/");
@@ -653,7 +653,7 @@ void list_files(std::string device_identifier, const char *application_identifie
 	}
 }
 
-bool ensure_device_path_exists(std::string &device_path, afc_connection *connection, std::string method_id, std::string device_identifier)
+bool ensure_device_path_exists(std::string &device_path, afc_connection *connection)
 {
 	std::vector<std::string> directories = split(device_path, kUnixPathSeparator);
 	std::string curent_device_path("");
@@ -663,52 +663,108 @@ bool ensure_device_path_exists(std::string &device_path, afc_connection *connect
 		{
 			curent_device_path += kUnixPathSeparator;
 			curent_device_path += directory_path;
-			PRINT_ERROR_AND_RETURN_VALUE_IF_FAILED_RESULT(AFCDirectoryCreate(connection, curent_device_path.c_str()), "Unable to make directory", device_identifier, method_id, false)
+			if (AFCDirectoryCreate(connection, curent_device_path.c_str()))
+				return false;
 		}
 	}
 
 	return true;
 }
 
-void upload_file(std::string device_identifier, const char *application_identifier, const char *source, const char *destination, std::string method_id) {
-	afc_file_ref file_ref;
-	std::string destination_str =  windows_path_to_unix(destination);
-	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, destination_str, method_id);
-	if (!afc_conn_p)
+void upload_file(std::string device_identifier, const char *application_identifier, const std::vector<FileUploadData>& files, std::string method_id) {
+	json success_json = json({ { kResponse, "Successfully uploaded files" },{ kId, method_id },{ kDeviceId, device_identifier } });
+	if (!files.size())
 	{
+		print(success_json);
 		return;
 	}
 
-	std::ifstream file(source, std::ios::binary | std::ios::ate);
-	std::streamsize size = file.tellg();
-	file.seekg(0, std::ios::beg);
-
-	std::vector<char> file_content(size);
-	if (file.read(file_content.data(), size))
+	std::string afc_destination_str = windows_path_to_unix(files[0].destination);
+	afc_connection* afc_conn_p = get_afc_connection(device_identifier, application_identifier, afc_destination_str, method_id);
+	if (!afc_conn_p)
 	{
-		destination = destination_str.c_str();
-		std::string dir_name = get_dirname(destination);
-		if (ensure_device_path_exists(dir_name, afc_conn_p, method_id, device_identifier))
+		// If there is no opened afc connection the get_afc_connection will print the error for the operation.
+		return;
+	}
+
+	// We need to set the size of errors here because we need to access the elements by index.
+	// If we don't access them by index and use push_back from multiple threads, some of them will try to push at the same memory.
+	// The result of this will be an exception.
+	std::vector<std::string> errors(files.size());
+	std::vector<std::thread> file_upload_threads;
+
+	for (size_t i = 0; i < files.size(); i++)
+	{
+		FileUploadData current_file_data = files[i];
+		file_upload_threads.emplace_back([=, &errors]() -> void
 		{
-			std::stringstream error_message;
-			AFCRemovePath(afc_conn_p, destination);
-			error_message << "Could not open file " << destination << " for writing";
-			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefOpen(afc_conn_p, destination, kAFCFileModeWrite, &file_ref), error_message.str().c_str(), device_identifier, method_id);
-			error_message.str("");
-			error_message << "Could not write to file: " << destination;
-			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefWrite(afc_conn_p, file_ref, &file_content[0], file_content.size()), error_message.str().c_str(), device_identifier, method_id);
-			error_message.str("");
-			error_message << "Could not close file reference: " << destination;
-			PRINT_ERROR_AND_RETURN_IF_FAILED_RESULT(AFCFileRefClose(afc_conn_p, file_ref), error_message.str().c_str(), device_identifier, method_id);
-			error_message.str("");
-			print(json({{ kResponse, "Successfully uploaded file" },{ kId, method_id },{ kDeviceId, device_identifier }}));
-		}
+			afc_file_ref file_ref;
+			std::string source = current_file_data.source;
+			std::string destination = current_file_data.destination;
+			FileInfo file_info = get_file_info(source, true);
+
+			if (file_info.size)
+			{
+				std::string dir_name = get_dirname(destination);
+				if (ensure_device_path_exists(dir_name, afc_conn_p))
+				{
+					std::stringstream error_message;
+					AFCRemovePath(afc_conn_p, destination.c_str());
+					error_message << "Could not open file " << destination << " for writing";
+					if (AFCFileRefOpen(afc_conn_p, destination.c_str(), kAFCFileModeWrite, &file_ref))
+					{
+						errors[i] = error_message.str();
+						return;
+					}
+
+					error_message.str("");
+					error_message << "Could not write to file: " << destination;
+
+					if (AFCFileRefWrite(afc_conn_p, file_ref, &file_info.contents[0], file_info.size))
+					{
+						errors[i] = error_message.str();
+						return;
+					}
+
+					error_message.str("");
+					error_message << "Could not close file reference: " << destination;
+					if (AFCFileRefClose(afc_conn_p, file_ref))
+					{
+						errors[i] = error_message.str();
+						return;
+					}
+				}
+				else
+				{
+					std::string message("Could not create device path for file: ");
+					message += source;
+					errors.push_back(message);
+				}
+			}
+			else
+			{
+				std::string message("Could not open file: ");
+				message += source;
+				errors.push_back(message);
+			}
+		});
+	}
+
+	for (std::thread& file_upload_thread : file_upload_threads)
+	{
+		file_upload_thread.join();
+	}
+
+	std::vector<std::string> filtered_errors;
+	std::copy_if(std::begin(errors), std::end(errors), std::back_inserter(filtered_errors), [](auto e) { return e.size() != 0; });
+
+	if (!filtered_errors.size())
+	{
+		print(success_json);
 	}
 	else
 	{
-		std::string message("Could not open file: ");
-		message += source;
-		print_error(message.c_str(), device_identifier, method_id, kAMDAPIInternalError);
+		print_errors(filtered_errors, device_identifier, method_id, kAMDAPIInternalError);
 	}
 }
 
@@ -1142,14 +1198,20 @@ int main()
 			{
 				for (json &arg : method_args)
 				{
-					if (!validate_device_id_and_attrs(arg, method_id, { kAppId , kSource, kDestination }))
-						continue;
-
 					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
-					std::string source = arg.value(kSource, "");
-					std::string destination = arg.value(kDestination, "");
-					upload_file(device_identifier, application_identifier.c_str(), source.c_str(), destination.c_str(), method_id);
+					std::vector<json> files = arg.value(kFiles, json::array()).get<std::vector<json>>();
+
+					std::thread([=]() -> void
+					{
+						std::vector<FileUploadData> files_data;
+						for (json file : files)
+						{
+							files_data.push_back({ file.value(kSource, ""), file.value(kDestination, "") });
+						}
+
+						upload_file(device_identifier, application_identifier.c_str(), files_data, method_id);
+					}).detach();
 				}
 			}
 			else if (method_name == "delete")

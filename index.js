@@ -33,12 +33,13 @@ const MethodNames = {
 const Events = {
 	deviceLogData: "deviceLogData"
 };
+const DataEventName = "data";
 
 class IOSDeviceLib extends EventEmitter {
 	constructor(onDeviceFound, onDeviceLost) {
 		super();
 		this._chProc = spawn(path.join(__dirname, "bin", os.platform(), os.arch(), "devicelib"));
-		this._chProc.stdout.on("data", (data) => {
+		this._chProc.stdout.on(DataEventName, (data) => {
 			const parsedMessage = this._read(data);
 			switch (parsedMessage.event) {
 				case DeviceEventEnum.kDeviceFound:
@@ -123,12 +124,12 @@ class IOSDeviceLib extends EventEmitter {
 						this.emit(Events.deviceLogData, response);
 					} else {
 						response.error ? reject(response.error) : resolve(response);
-						this._chProc.stdout.removeListener("data", eventHandler);
+						this._chProc.stdout.removeListener(DataEventName, eventHandler);
 					}
 				}
 			};
 
-			this._chProc.stdout.on("data", eventHandler);
+			this._chProc.stdout.on(DataEventName, eventHandler);
 			this._chProc.stdin.write(this._getMessage(id, methodName, args));
 		});
 	}
