@@ -51,7 +51,12 @@ declare module IOSDeviceLib {
 	}
 
 	interface INotifyData extends IDeviceId {
+		commandType: string;
 		notificationName: string;
+		shouldWaitForResponse: boolean;
+		timeout?: number;
+		responseCommandType?: string;
+		responsePropertyName?: string;
 	}
 
 	interface IDeviceResponse extends IDeviceId {

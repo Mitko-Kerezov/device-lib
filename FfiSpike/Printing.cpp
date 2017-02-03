@@ -24,6 +24,7 @@ void print_error(const char *message, std::string device_identifier, std::string
 	nlohmann::json exception;
 	exception[kError][kMessage] = message;
 	exception[kError][kCode] = code;
+	exception[kError][kDeviceId] = device_identifier;
 	exception[kDeviceId] = device_identifier;
 	exception[kId] = method_id;
 	//Decided it's a better idea to print everything to stdout
@@ -34,10 +35,7 @@ void print_error(const char *message, std::string device_identifier, std::string
 
 void print_errors(std::vector<std::string>& messages, std::string device_identifier, std::string method_id, int code)
 {
-	nlohmann::json exception;
-	exception[kError][kMessages] = messages;
-	exception[kError][kCode] = code;
-	exception[kDeviceId] = device_identifier;
-	exception[kId] = method_id;
-	print(exception);
+	std::ostringstream joined_error_message;
+	std::copy(messages.begin(), messages.end(), std::ostream_iterator<std::string>(joined_error_message, "\n"));
+	print_error(joined_error_message.str().c_str(), device_identifier, method_id, code);
 }

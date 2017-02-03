@@ -23,6 +23,16 @@ typedef unsigned long long SOCKET;
 
 #pragma region Data_Structures_Definition
 
+struct PostNotificationInfo
+{
+	std::string command_type;
+	std::string notification_name;
+	std::string response_command_type;
+	std::string response_property_name;
+	bool should_wait_for_response;
+	int timeout;
+};
+
 struct DeviceApplication {
 	std::string CFBundleExecutable;
 	std::string Path;
