@@ -692,67 +692,81 @@ void upload_file(std::string device_identifier, const char *application_identifi
 	// The result of this will be an exception.
 	std::vector<std::string> errors(files.size());
 	std::vector<std::thread> file_upload_threads;
+	// We're only ever going to insert kDeviceUploadFilesBatchSize elements
+	file_upload_threads.reserve(kDeviceUploadFilesBatchSize);
 
-	for (size_t i = 0; i < files.size(); i++)
+	// Launching a separate thread for each file puts a strain on the OS' memory
+	// That's why we launch batches of threads - kDeviceUploadFilesBatchSize each
+	size_t batch_end = files.size() / kDeviceUploadFilesBatchSize + 1;
+	for (size_t batch_index = 0; batch_index < batch_end; ++batch_index)
 	{
-		FileUploadData current_file_data = files[i];
-		file_upload_threads.emplace_back([=, &errors]() -> void
+		size_t start = batch_index * kDeviceUploadFilesBatchSize;
+		size_t end = (std::min)((batch_index + 1 ) * kDeviceUploadFilesBatchSize, files.size());
+
+		for (size_t i = start; i < end; ++i)
 		{
-			afc_file_ref file_ref;
-			std::string source = current_file_data.source;
-			std::string destination = current_file_data.destination;
-			FileInfo file_info = get_file_info(source, true);
-
-			if (file_info.size)
+			FileUploadData current_file_data = files[i];
+			file_upload_threads.emplace_back([=, &errors]() -> void
 			{
-				std::string dir_name = get_dirname(destination);
-				if (ensure_device_path_exists(dir_name, afc_conn_p))
+				afc_file_ref file_ref;
+				std::string source = current_file_data.source;
+				std::string destination = current_file_data.destination;
+				FileInfo file_info = get_file_info(source, true);
+
+				if (file_info.size)
 				{
-					std::stringstream error_message;
-					AFCRemovePath(afc_conn_p, destination.c_str());
-					error_message << "Could not open file " << destination << " for writing";
-					if (AFCFileRefOpen(afc_conn_p, destination.c_str(), kAFCFileModeWrite, &file_ref))
+					std::string dir_name = get_dirname(destination);
+					if (ensure_device_path_exists(dir_name, afc_conn_p))
 					{
-						errors[i] = error_message.str();
-						return;
+						std::stringstream error_message;
+						AFCRemovePath(afc_conn_p, destination.c_str());
+						error_message << "Could not open file " << destination << " for writing";
+						if (AFCFileRefOpen(afc_conn_p, destination.c_str(), kAFCFileModeWrite, &file_ref))
+						{
+							errors[i] = error_message.str();
+							return;
+						}
+
+						error_message.str("");
+						error_message << "Could not write to file: " << destination;
+
+						if (AFCFileRefWrite(afc_conn_p, file_ref, &file_info.contents[0], file_info.size))
+						{
+							errors[i] = error_message.str();
+							return;
+						}
+
+						error_message.str("");
+						error_message << "Could not close file reference: " << destination;
+						if (AFCFileRefClose(afc_conn_p, file_ref))
+						{
+							errors[i] = error_message.str();
+							return;
+						}
 					}
-
-					error_message.str("");
-					error_message << "Could not write to file: " << destination;
-
-					if (AFCFileRefWrite(afc_conn_p, file_ref, &file_info.contents[0], file_info.size))
+					else
 					{
-						errors[i] = error_message.str();
-						return;
-					}
-
-					error_message.str("");
-					error_message << "Could not close file reference: " << destination;
-					if (AFCFileRefClose(afc_conn_p, file_ref))
-					{
-						errors[i] = error_message.str();
-						return;
+						std::string message("Could not create device path for file: ");
+						message += source;
+						errors.push_back(message);
 					}
 				}
 				else
 				{
-					std::string message("Could not create device path for file: ");
+					std::string message("Could not open file: ");
 					message += source;
 					errors.push_back(message);
 				}
-			}
-			else
-			{
-				std::string message("Could not open file: ");
-				message += source;
-				errors.push_back(message);
-			}
-		});
-	}
+			});
+		}
 
-	for (std::thread& file_upload_thread : file_upload_threads)
-	{
-		file_upload_thread.join();
+		for (std::thread& file_upload_thread : file_upload_threads)
+		{
+			file_upload_thread.join();
+		}
+
+		// After a batch is completed we need to empty file_upload_threads so that the new batch may take the old one's place
+		file_upload_threads.clear();
 	}
 
 	std::vector<std::string> filtered_errors;
@@ -1224,7 +1238,7 @@ int main()
 					std::string application_identifier = arg.value(kAppId, "");
 					std::string device_identifier = arg.value(kDeviceId, "");
 					std::string destination = arg.value(kDestination, "");
-					delete_file(device_identifier, application_identifier.c_str(), destination.c_str(), method_id);
+					std::thread([=]() { delete_file(device_identifier, application_identifier.c_str(), destination.c_str(), method_id); }).detach();
 				}
 			}
 			else if (method_name == "read")
