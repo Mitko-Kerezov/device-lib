@@ -222,6 +222,8 @@ extern "C"
 	unsigned AMDeviceMountImage(const DeviceInfo*, CFStringRef, CFDictionaryRef, void(*f)(void*, int), void*);
 	unsigned AMDeviceStartService(const DeviceInfo*, CFStringRef, HANDLE*, void*);
 	unsigned AMDeviceLookupApplications(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
+	int AMDeviceGetConnectionID(const DeviceInfo*);
+	int AMDeviceGetInterfaceType(const DeviceInfo*);
 	unsigned AMDeviceUninstallApplication(HANDLE, CFStringRef, void*, void(*f)(), void*);
 	unsigned AMDeviceStartSession(const DeviceInfo*);
 	unsigned AMDeviceStopSession(const DeviceInfo*);
@@ -245,6 +247,7 @@ extern "C"
 	unsigned AFCFileRefRead(afc_connection*, afc_file_ref, void*, size_t*);
 	unsigned AFCFileRefWrite(afc_connection*, afc_file_ref, const void*, size_t);
 	unsigned AFCFileRefClose(afc_connection*, afc_file_ref);
+    int USBMuxConnectByPort(int, int, int*);
 }
 
 #endif // !_WIN32
