@@ -223,6 +223,7 @@ extern "C"
 	unsigned AMDeviceStartService(const DeviceInfo*, CFStringRef, HANDLE*, void*);
 	unsigned AMDeviceLookupApplications(const DeviceInfo*, CFDictionaryRef, CFDictionaryRef*);
 	int AMDeviceGetConnectionID(const DeviceInfo*);
+	int AMDeviceGetInterfaceType(const DeviceInfo*);
 	unsigned AMDeviceUninstallApplication(HANDLE, CFStringRef, void*, void(*f)(), void*);
 	unsigned AMDeviceStartSession(const DeviceInfo*);
 	unsigned AMDeviceStopSession(const DeviceInfo*);

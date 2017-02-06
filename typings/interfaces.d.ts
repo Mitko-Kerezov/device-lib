@@ -90,6 +90,14 @@ declare module IOSDeviceLib {
 		response: { [key: string]: IDeviceApplication };
 	}
 
+	interface IDeviceError extends Error {
+		deviceId: string;
+	}
+
+	interface IConnectToPortData extends IDeviceId {
+		port: number;
+	}
+
 	interface IOSDeviceLib extends NodeJS.EventEmitter {
 		new (onDeviceFound: (found: IDeviceActionInfo) => void, onDeviceLost: (found: IDeviceActionInfo) => void): IOSDeviceLib;
 		install(ipaPath: string, deviceIdentifiers: string[]): Promise<IDeviceResponse>[];
@@ -104,6 +112,7 @@ declare module IOSDeviceLib {
 		start(startArray: IDdiApplicationData[]): Promise<IDeviceResponse>[];
 		stop(stopArray: IDdiApplicationData[]): Promise<IDeviceResponse>[];
 		startDeviceLog(deviceIdentifiers: string[]): void;
+		connectToPort(connectToPortArray: IConnectToPortData[]): Promise<IDeviceResponse>[];
 		dispose(signal?: string): void;
 		on(event: "deviceLogData", listener: (response: IDeviceLogData) => void): this;
 	}
